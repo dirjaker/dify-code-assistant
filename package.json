@@ -1,0 +1,120 @@
+{
+  "name": "dify-code-assistant",
+  "displayName": "Dify Code Assistant",
+  "description": "AI code assistant powered by Dify - chat, autocomplete, and code editing",
+  "version": "0.1.0",
+  "publisher": "dirjaker",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Machine Learning",
+    "AI",
+    "Chat"
+  ],
+  "icon": "resources/icon.png",
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "dify.openChat",
+        "title": "Dify: Open Chat",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "dify.explainCode",
+        "title": "Dify: Explain Code",
+        "icon": "$(book)"
+      },
+      {
+        "command": "dify.refactorCode",
+        "title": "Dify: Refactor Code",
+        "icon": "$(wrench)"
+      },
+      {
+        "command": "dify.fixCode",
+        "title": "Dify: Fix Code",
+        "icon": "$(bug)"
+      },
+      {
+        "command": "dify.settings",
+        "title": "Dify: Settings",
+        "icon": "$(gear)"
+      }
+    ],
+    "configuration": {
+      "title": "Dify Code Assistant",
+      "properties": {
+        "dify.apiUrl": {
+          "type": "string",
+          "default": "http://192.168.31.100:9000",
+          "description": "Dify API URL"
+        },
+        "dify.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Dify API Key (app-xxx)"
+        },
+        "dify.model": {
+          "type": "string",
+          "default": "deepseek-coder",
+          "description": "Model name in Dify"
+        },
+        "dify.enableAutocomplete": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline code completion"
+        },
+        "dify.maxTokens": {
+          "type": "number",
+          "default": 2048,
+          "description": "Maximum tokens for response"
+        }
+      }
+    },
+    "keybindings": [
+      {
+        "command": "dify.openChat",
+        "key": "ctrl+shift+d",
+        "mac": "cmd+shift+d"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "dify.explainCode",
+          "when": "editorHasSelection",
+          "group": "dify@1"
+        },
+        {
+          "command": "dify.refactorCode",
+          "when": "editorHasSelection",
+          "group": "dify@2"
+        },
+        {
+          "command": "dify.fixCode",
+          "when": "editorHasSelection",
+          "group": "dify@3"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "vsce package",
+    "lint": "eslint src --ext ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
