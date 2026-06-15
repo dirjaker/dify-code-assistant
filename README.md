@@ -1,185 +1,123 @@
 <div align="center">
 
-# Dify Code Assistant
+<img src="assets/banner.svg" width="100%" alt="Dify Code Assistant">
 
-**AI-Powered Code Assistant for VS Code, Powered by Dify**
+<br>
 
-[![VS Code](https://img.shields.io/badge/VS%20Code-1.85%2B-blue.svg)](https://code.visualstudio.com/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.1.0-orange.svg)](CHANGELOG.md)
+### VS Code AI 编程助手
+
+[![Stars](https://img.shields.io/github/stars/dirjaker/dify-code-assistant?style=flat-square&label=Stars&color=FFD700)](https://github.com/dirjaker/dify-code-assistant/stargazers)
+[![Forks](https://img.shields.io/github/forks/dirjaker/dify-code-assistant?style=flat-square&label=Forks&color=4A90D9)](https://github.com/dirjaker/dify-code-assistant/network/members)
+[![Contributors](https://img.shields.io/github/contributors/dirjaker/dify-code-assistant?style=flat-square&label=Contributors&color=8B4513)](https://github.com/dirjaker/dify-code-assistant/graphs/contributors)
+[![License](https://img.shields.io/github/license/dirjaker/dify-code-assistant?style=flat-square&label=License&color=20B2AA)](https://github.com/dirjaker/dify-code-assistant/blob/dev/LICENSE)
 
 </div>
 
 ---
 
-## Overview
+## 功能特性
 
-Dify Code Assistant is a VS Code extension that brings AI-powered coding assistance directly to your editor. Powered by [Dify](https://dify.ai), it provides intelligent code completion, chat-based assistance, and code analysis capabilities.
+| 功能 | 描述 |
+|------|------|
+| 💬 **智能对话** | 基于 Dify 平台的 AI 聊天助手 |
+| ✨ **代码补全** | 输入时自动补全代码建议 |
+| 📖 **代码解释** | 选中代码一键获取详细解释 |
+| 🔧 **代码重构** | AI 辅助代码重构建议 |
+| 🐛 **错误修复** | 智能识别并修复代码错误 |
+| ⚙️ **灵活配置** | 支持自定义 API 地址和模型 |
 
-## Features
+## 快速开始
 
-### Chat Assistant
-- Ask questions about your code
-- Get explanations for complex code blocks
-- Receive refactoring suggestions
-- Debug issues with AI assistance
-
-### Code Completion
-- Inline code suggestions as you type
-- Context-aware completions
-- Multi-language support
-
-### Code Actions
-- **Explain Code** - Get detailed explanations of selected code
-- **Refactor Code** - Get suggestions for improving code quality
-- **Fix Code** - Identify and fix bugs in your code
-
-## Installation
-
-### Method 1: Install from VSIX
-
-1. Download the latest `.vsix` file from [Releases](https://github.com/dirjaker/dify-code-assistant/releases)
-2. Open VS Code
-3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on macOS)
-4. Type "Extensions: Install from VSIX..."
-5. Select the downloaded `.vsix` file
-
-### Method 2: Build from Source
+### 安装插件
 
 ```bash
-# Clone the repository
+# 克隆项目
 git clone https://github.com/dirjaker/dify-code-assistant.git
 cd dify-code-assistant
 
-# Install dependencies
+# 安装依赖
 npm install
 
-# Compile
-npm run compile
-
-# Package
+# 编译打包
 npm run package
+
+# 安装到 VS Code
+# 方法1: 双击生成的 .vsix 文件
+# 方法2: VS Code -> Ctrl+Shift+P -> Extensions: Install from VSIX...
 ```
 
-## Configuration
+### 配置
 
-Open VS Code Settings (`Ctrl+,`) and search for "Dify":
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| `dify.apiUrl` | Dify API URL | `http://192.168.31.100:9000` |
-| `dify.apiKey` | Dify API Key (app-xxx) | `""` |
-| `dify.model` | Model name | `deepseek-coder` |
-| `dify.enableAutocomplete` | Enable inline completion | `true` |
-| `dify.maxTokens` | Maximum tokens for response | `2048` |
-
-### Example Configuration
+打开 VS Code 设置 (`Ctrl+,`)，搜索 `Dify`：
 
 ```json
 {
   "dify.apiUrl": "http://your-dify-server:9000",
-  "dify.apiKey": "REDACTED_DIFY_KEY",
+  "dify.apiKey": "app-xxxxxxxxxxxx",
   "dify.model": "deepseek-coder"
 }
 ```
 
-## Usage
+### 使用方法
 
-### Open Chat
-- Press `Ctrl+Shift+D` (or `Cmd+Shift+D` on macOS)
-- Or click the Dify icon in the status bar
-- Or use Command Palette: "Dify: Open Chat"
+| 快捷键 | 功能 |
+|--------|------|
+| `Ctrl+Shift+D` | 打开聊天面板 |
+| `Ctrl+Shift+P` → `Dify: Explain Code` | 解释选中代码 |
+| `Ctrl+Shift+P` → `Dify: Refactor Code` | 重构选中代码 |
+| `Ctrl+Shift+P` → `Dify: Fix Code` | 修复选中代码 |
 
-### Code Actions
-1. Select code in the editor
-2. Right-click to open context menu
-3. Choose an action:
-   - **Dify: Explain Code**
-   - **Dify: Refactor Code**
-   - **Dify: Fix Code**
+## 技术栈
 
-### Chat Features
-- Type your question in the chat input
-- Press `Enter` to send
-- Use `Shift+Enter` for new line
-- Click "Copy" to copy code blocks
-- Click "Insert" to insert code at cursor position
+| 层级 | 技术 |
+|------|------|
+| **框架** | VS Code Extension API |
+| **语言** | TypeScript |
+| **API** | Dify REST API |
+| **UI** | WebView (HTML/CSS/JS) |
+| **构建** | esbuild / tsc |
 
-## Architecture
+## 项目结构
 
 ```
-src/
-├── extension.ts        # Entry point, command registration
-├── difyClient.ts       # Dify API client (HTTP/Stream)
-├── chatPanel.ts        # Chat WebView panel
-├── completionProvider.ts # Inline completion provider
-└── config.ts           # Configuration management
+dify-code-assistant/
+├── src/
+│   ├── extension.ts          # 入口，注册命令
+│   ├── difyClient.ts         # Dify API 客户端
+│   ├── chatPanel.ts          # 聊天 WebView 面板
+│   ├── completionProvider.ts # 代码补全
+│   └── config.ts             # 配置管理
+├── assets/
+│   └── banner.svg            # 项目 Banner
+├── resources/
+│   └── icon.png              # 插件图标
+├── package.json              # 插件清单
+└── README.md
 ```
 
-### API Integration
+## 开发日志
 
-The extension communicates with Dify via REST API:
+- [x] 项目初始化
+- [x] Dify API 客户端
+- [x] 聊天面板 UI
+- [x] 代码补全功能
+- [x] 代码操作（解释/重构/修复）
+- [x] 打包为 .vsix
+- [ ] 流式响应支持
+- [ ] 多会话管理
+- [ ] 代码库上下文（RAG）
+- [ ] 自定义系统提示词
 
-```
-POST /v1/chat-messages
-Authorization: Bearer <api-key>
-Content-Type: application/json
+## 许可证
 
-{
-  "inputs": {},
-  "query": "Your question",
-  "response_mode": "blocking",
-  "user": "vscode-user"
-}
-```
+[MIT License](LICENSE)
 
-## Development
+---
 
-### Prerequisites
+<div align="center">
 
-- Node.js >= 18.x
-- npm >= 9.x
-- VS Code >= 1.85
+GitHub: [dirjaker/dify-code-assistant](https://github.com/dirjaker/dify-code-assistant)
 
-### Setup
+如果这个项目对你有帮助，请给一个 Star 支持一下！
 
-```bash
-# Install dependencies
-npm install
-
-# Watch mode for development
-npm run watch
-
-# Run extension in VS Code
-# Press F5 in VS Code to launch Extension Development Host
-```
-
-### Build
-
-```bash
-# Compile
-npm run compile
-
-# Package
-npm run package
-```
-
-## Roadmap
-
-- [ ] Streaming response support
-- [ ] Multi-conversation management
-- [ ] Codebase-aware context (RAG)
-- [ ] Custom system prompts
-- [ ] Model selection UI
-- [ ] Conversation history
-- [ ] Export conversations
-- [ ] Keyboard shortcuts customization
-
-## License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
-## Acknowledgments
-
-- [Dify](https://dify.ai) - LLM application development platform
-- [VS Code Extension API](https://code.visualstudio.com/api) - Extension development framework
+</div>
