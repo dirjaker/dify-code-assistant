@@ -84,9 +84,8 @@
 
   <line x1="480" y1="50" x2="480" y2="350" stroke="white" stroke-width="0.5" opacity="0.12"/>
 
-  <text x="540" y="120" font-family="'SF Pro Display','Helvetica Neue',Arial,sans-serif" font-size="80" font-weight="800" fill="white" letter-spacing="4">DIFY CODE</text>
-  <text x="540" y="185" font-family="'SF Pro Display','Helvetica Neue',Arial,sans-serif" font-size="80" font-weight="800" fill="white" letter-spacing="4">ASSISTANT</text>
-  <text x="540" y="225" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif" font-size="22" font-weight="500" fill="white" opacity="0.9" letter-spacing="3">VS Code AI 编程助手</text>
+  <text x="540" y="140" font-family="'SF Pro Display','Helvetica Neue',Arial,sans-serif" font-size="72" font-weight="800" fill="white" letter-spacing="4">DIFY CODE ASSISTANT</text>
+  <text x="540" y="195" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif" font-size="22" font-weight="500" fill="white" opacity="0.9" letter-spacing="3">VS Code AI 编程助手</text>
   <text x="540" y="265" font-family="'Noto Sans SC','PingFang SC','Microsoft YaHei',sans-serif" font-size="14" font-weight="300" fill="white" opacity="0.5" letter-spacing="1.5">智能对话 · 代码补全 · 代码解释 · 代码重构 · 错误修复</text>
   <text x="540" y="305" font-family="'SF Mono','Fira Code','Consolas',monospace" font-size="12" fill="white" opacity="0.4" letter-spacing="1.5">TypeScript · VS Code Extension · Dify API</text>
   <line x1="540" y1="345" x2="1170" y2="345" stroke="white" stroke-width="0.5" opacity="0.1"/>
