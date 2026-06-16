@@ -11,7 +11,7 @@ export interface DifyConfig {
 export function getConfig(): DifyConfig {
     const config = vscode.workspace.getConfiguration('dify');
     return {
-        apiUrl: config.get<string>('apiUrl', 'http://192.168.31.100:9000'),
+        apiUrl: config.get<string>('apiUrl', 'http://localhost:9000'),
         apiKey: config.get<string>('apiKey', ''),
         model: config.get<string>('model', 'deepseek-coder'),
         enableAutocomplete: config.get<boolean>('enableAutocomplete', true),
