@@ -102,7 +102,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * 处理用户消息 — 核心 Agent 循环
+     * 处理用户消息 — 核心 Agent 循环（流式输出）
      */
     private async _handleMessage(text: string): Promise<void> {
         this._postMessage({ command: 'startThinking' });
@@ -114,29 +114,38 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // 构建系统提示词
             const systemPrompt = this._buildSystemPrompt(context);
 
-            // 发送消息到 Dify
-            const response = await this._client.chat(
+            // 流式发送消息到 Dify
+            let fullAnswer = '';
+            let streamStarted = false;
+
+            const response = await this._client.chatStream(
                 context ? `${context}\n\n---\n\n${text}` : text,
+                (chunk: string) => {
+                    if (!streamStarted) {
+                        // 第一个 chunk 到达，通知 webview 开始流式渲染
+                        this._postMessage({ command: 'startStream' });
+                        streamStarted = true;
+                    }
+                    fullAnswer += chunk;
+                    this._postMessage({ command: 'streamChunk', chunk });
+                },
                 systemPrompt
             );
 
+            // 流式结束
+            if (streamStarted) {
+                this._postMessage({ command: 'endStream' });
+            }
+
             // 解析工具调用
-            const toolCalls = this._toolExecutor.parseToolCalls(response.answer);
+            const toolCalls = this._toolExecutor.parseToolCalls(fullAnswer);
 
             if (toolCalls.length > 0) {
-                // 有工具调用 — 先显示 AI 的文字部分
-                const textOnly = response.answer.replace(/```action\s*\n[\s\S]*?```/g, '').trim();
-                if (textOnly) {
-                    this._postMessage({ command: 'receiveMessage', text: textOnly, role: 'assistant' });
-                }
-
-                // 执行工具调用
+                // 有工具调用 — 执行工具
                 const results = await this._toolExecutor.executeAll(toolCalls);
 
-                // 处理工具结果
                 for (const result of results) {
                     if (result.type === 'write_file' && result.diff) {
-                        // 显示 diff 预览
                         this._postMessage({
                             command: 'showDiff',
                             filePath: result.diff.filePath,
@@ -152,9 +161,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                         });
                     }
                 }
-            } else {
-                // 纯文字回复
-                this._postMessage({ command: 'receiveMessage', text: response.answer, role: 'assistant' });
+            } else if (!streamStarted) {
+                // 没有流式输出也没有工具调用，显示完整回复
+                this._postMessage({ command: 'receiveMessage', text: fullAnswer, role: 'assistant' });
             }
         } catch (error: any) {
             this._postMessage({ command: 'receiveMessage', text: 'Error: ' + error.message, role: 'error' });
