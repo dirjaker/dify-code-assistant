@@ -10,35 +10,78 @@
     const sendBtnEl = document.getElementById('sendBtn');
     const clearBtnEl = document.getElementById('clearBtn');
     const settingsBtnEl = document.getElementById('settingsBtn');
+    const contextArea = document.getElementById('inputContext');
 
     let currentMode = 'ask';
+    let currentContext = []; // {type, label, icon}
 
     // ═══════════════════════════════════════
-    // Mode Switcher
+    // Mode Switcher — Ctrl+. 循环切换
     // ═══════════════════════════════════════
+
+    const modes = ['ask', 'plan', 'agent'];
+
+    function setMode(mode) {
+        currentMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(function(b) {
+            b.classList.toggle('active', b.getAttribute('data-mode') === mode);
+        });
+        vscode.postMessage({ command: 'setMode', mode: mode });
+
+        var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
+        inputEl.placeholder = placeholders[mode] || 'Ask anything...';
+
+        // 更新 meta 信息
+        var metaEl = document.querySelector('.input-meta');
+        if (metaEl) {
+            var modeLabels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
+            metaEl.textContent = modeLabels[mode] || '';
+        }
+    }
 
     document.querySelectorAll('.mode-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var mode = this.getAttribute('data-mode');
-            if (mode && mode !== currentMode) {
-                currentMode = mode;
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
-                    b.classList.remove('active');
-                });
-                this.classList.add('active');
-                vscode.postMessage({ command: 'setMode', mode: mode });
-
-                // 更新 placeholder
-                var placeholders = {
-                    ask: 'Ask anything...',
-                    plan: 'Describe your task...',
-                    agent: 'Tell me what to build...'
-                };
-                inputEl.placeholder = placeholders[mode] || 'Ask anything...';
-                focusInput();
-            }
+            if (mode && mode !== currentMode) { setMode(mode); focusInput(); }
         });
     });
+
+    // Ctrl+. 循环模式
+    document.addEventListener('keydown', function(e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+            e.preventDefault();
+            var idx = modes.indexOf(currentMode);
+            var next = modes[(idx + 1) % modes.length];
+            setMode(next);
+            focusInput();
+        }
+    });
+
+    // ═══════════════════════════════════════
+    // Context Management
+    // ═══════════════════════════════════════
+
+    function updateContextPills(contexts) {
+        currentContext = contexts || [];
+        contextArea.innerHTML = '';
+        if (currentContext.length === 0) return;
+
+        currentContext.forEach(function(ctx) {
+            var tag = document.createElement('span');
+            tag.className = 'context-tag';
+
+            var icon = document.createElement('span');
+            icon.className = 'tag-icon';
+            icon.innerHTML = ctx.icon || '';
+
+            var label = document.createElement('span');
+            label.textContent = ctx.label;
+
+            tag.appendChild(icon);
+            tag.appendChild(label);
+            contextArea.appendChild(tag);
+        });
+    }
 
     // ═══════════════════════════════════════
     // Send
@@ -49,7 +92,7 @@
         if (!text) return;
 
         welcomeEl.style.display = 'none';
-        appendMessage(text, 'user');
+        appendStep(text, 'user');
         vscode.postMessage({ command: 'sendMessage', text: text });
 
         requestAnimationFrame(function() {
@@ -59,16 +102,10 @@
         });
     }
 
-    sendBtnEl.addEventListener('click', function(e) {
-        e.preventDefault();
-        doSend();
-    });
+    sendBtnEl.addEventListener('click', function(e) { e.preventDefault(); doSend(); });
 
     inputEl.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            doSend();
-        }
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
     });
 
     inputEl.addEventListener('input', function() {
@@ -101,42 +138,57 @@
     document.querySelectorAll('.quick-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var prompt = this.getAttribute('data-prompt');
-            if (prompt) {
-                inputEl.value = prompt;
-                focusInput();
-            }
+            if (prompt) { inputEl.value = prompt; focusInput(); }
         });
     });
 
     // ═══════════════════════════════════════
-    // Message Rendering
+    // Step Container — Continue 风格
     // ═══════════════════════════════════════
 
-    function appendMessage(text, role) {
-        var div = document.createElement('div');
-        div.className = 'msg ' + role;
+    function appendStep(text, role) {
+        var step = document.createElement('div');
+        step.className = 'step ' + role;
 
+        // Header
         var header = document.createElement('div');
-        header.className = 'msg-header';
+        header.className = 'step-header';
 
         var roleLabel = document.createElement('span');
-        roleLabel.className = 'msg-role';
+        roleLabel.className = 'step-role';
         var roleNames = { user: 'You', assistant: 'AI', error: 'Error', system: 'System', tool: 'Tool' };
         roleLabel.textContent = roleNames[role] || role;
 
-        header.appendChild(roleLabel);
+        var actions = document.createElement('div');
+        actions.className = 'step-actions';
 
+        if (role === 'assistant') {
+            var copyBtn = document.createElement('button');
+            copyBtn.className = 'step-action-btn';
+            copyBtn.textContent = 'Copy';
+            copyBtn.addEventListener('click', function() {
+                vscode.postMessage({ command: 'copyCode', code: text });
+                copyBtn.textContent = 'Copied';
+                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
+            });
+            actions.appendChild(copyBtn);
+        }
+
+        header.appendChild(roleLabel);
+        header.appendChild(actions);
+
+        // Body
         var body = document.createElement('div');
-        body.className = 'msg-body';
+        body.className = 'step-body';
         body.innerHTML = renderMarkdown(text);
 
-        div.appendChild(header);
-        div.appendChild(body);
-        messagesEl.appendChild(div);
+        step.appendChild(header);
+        step.appendChild(body);
+        messagesEl.appendChild(step);
         messagesEl.scrollTop = messagesEl.scrollHeight;
 
-        // 给代码块添加操作栏
-        addCodeActions(div);
+        // 代码块操作栏
+        addCodeActions(step);
     }
 
     function addCodeActions(container) {
@@ -177,7 +229,6 @@
 
             actions.appendChild(copyBtn);
             actions.appendChild(insertBtn);
-
             bar.appendChild(langSpan);
             bar.appendChild(actions);
             pre.insertBefore(bar, pre.firstChild);
@@ -185,24 +236,24 @@
     }
 
     // ═══════════════════════════════════════
-    // Diff Display
+    // Diff Display — Continue 风格内联 diff
     // ═══════════════════════════════════════
 
-    function showDiff(filePath, html, additions, deletions) {
+    function showDiff(filePath, html) {
         welcomeEl.style.display = 'none';
 
-        var container = document.createElement('div');
-        container.className = 'msg assistant';
+        var step = document.createElement('div');
+        step.className = 'step assistant';
 
         var header = document.createElement('div');
-        header.className = 'msg-header';
+        header.className = 'step-header';
         var roleLabel = document.createElement('span');
-        roleLabel.className = 'msg-role';
+        roleLabel.className = 'step-role';
         roleLabel.textContent = 'AI';
         header.appendChild(roleLabel);
 
         var body = document.createElement('div');
-        body.className = 'msg-body';
+        body.className = 'step-body';
 
         var desc = document.createElement('div');
         desc.style.cssText = 'margin-bottom:8px;font-size:12px;color:var(--text-secondary);';
@@ -212,7 +263,7 @@
         diffContainer.className = 'diff-container';
         diffContainer.innerHTML = html;
 
-        // 操作按钮
+        // Accept/Reject 按钮 — Continue 风格
         var actions = document.createElement('div');
         actions.className = 'diff-actions';
 
@@ -228,7 +279,7 @@
         rejectBtn.textContent = 'Reject';
         rejectBtn.addEventListener('click', function() {
             vscode.postMessage({ command: 'rejectDiff', filePath: filePath });
-            container.remove();
+            step.remove();
         });
 
         var acceptAllBtn = document.createElement('button');
@@ -245,9 +296,9 @@
         diffContainer.appendChild(actions);
         body.appendChild(desc);
         body.appendChild(diffContainer);
-        container.appendChild(header);
-        container.appendChild(body);
-        messagesEl.appendChild(container);
+        step.appendChild(header);
+        step.appendChild(body);
+        messagesEl.appendChild(step);
         messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
@@ -280,37 +331,21 @@
     function renderMarkdown(text) {
         var html = text;
 
-        // 代码块
         html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
             return '<pre><code class="language-' + (lang || 'text') + '">' + escapeHtml(code.trim()) + '</code></pre>';
         });
 
-        // 行内代码
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-        // 标题
         html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
         html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
         html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-        // 粗体斜体
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
         html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-        // 链接
         html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-        // 列表
         html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
         html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-
-        // 引用
         html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-
-        // 分割线
         html = html.replace(/^---$/gm, '<hr>');
-
-        // 换行
         html = html.replace(/\n\n/g, '</p><p>');
         html = html.replace(/\n/g, '<br>');
 
@@ -318,26 +353,17 @@
     }
 
     function escapeHtml(text) {
-        return text
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
     // ═══════════════════════════════════════
     // Helpers
     // ═══════════════════════════════════════
 
-    function focusInput() {
-        if (inputEl) inputEl.focus();
-    }
+    function focusInput() { if (inputEl) inputEl.focus(); }
 
     messagesEl.addEventListener('click', function(e) {
-        if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-            focusInput();
-        }
+        if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) { focusInput(); }
     });
 
     // ═══════════════════════════════════════
@@ -348,7 +374,7 @@
         var msg = event.data;
         switch (msg.command) {
             case 'receiveMessage':
-                appendMessage(msg.text, msg.role);
+                appendStep(msg.text, msg.role);
                 break;
             case 'startThinking':
                 thinkingEl.classList.add('show');
@@ -365,19 +391,15 @@
                 welcomeEl.style.display = '';
                 break;
             case 'modeChanged':
-                currentMode = msg.mode;
-                document.querySelectorAll('.mode-btn').forEach(function(b) {
-                    b.classList.toggle('active', b.getAttribute('data-mode') === msg.mode);
-                });
+                setMode(msg.mode);
                 break;
             case 'showDiff':
-                showDiff(msg.filePath, msg.html, msg.additions, msg.deletions);
+                showDiff(msg.filePath, msg.html);
                 break;
             case 'diffApplied':
-                // 标记已应用
                 var applied = document.createElement('div');
                 applied.className = 'tool-result';
-                applied.innerHTML = '<div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved.</div>';
+                applied.innerHTML = '<div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved. Changes highlighted in editor.</div>';
                 messagesEl.appendChild(applied);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
                 break;
@@ -386,12 +408,14 @@
             case 'toolResult':
                 showToolResult(msg.type, msg.data);
                 break;
+            case 'updateContext':
+                updateContextPills(msg.contexts || []);
+                break;
             case 'fillInput':
                 inputEl.value = msg.text;
                 focusInput();
                 break;
             case 'info':
-                // 简单提示
                 break;
             case 'focusInput':
                 focusInput();
