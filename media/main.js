@@ -955,6 +955,10 @@
     var streamBuffer = '';
     var userScrolledUp = false;
 
+    var streamRenderTimer = null;
+    var streamTextNode = null;       // single text node, append-only
+    var streamPlainDiv = null;       // plain text container
+
     function startStream() {
         welcomeEl.style.display = 'none';
         userScrolledUp = false;
@@ -965,39 +969,35 @@
         streamingContent = document.createElement('div');
         streamingContent.className = 'step-content streaming';
 
+        // During streaming: plain text container (no innerHTML, no flicker)
+        streamPlainDiv = document.createElement('div');
+        streamPlainDiv.className = 'stream-plain';
+        streamTextNode = document.createTextNode('');
+        streamPlainDiv.appendChild(streamTextNode);
+        streamingContent.appendChild(streamPlainDiv);
+
         streamingStep.appendChild(streamingContent);
         stepsArea.insertBefore(streamingStep, thinkingEl);
         streamBuffer = '';
 
-        // 隐藏 thinking，显示 cancel 按钮
         thinkingEl.classList.remove('show');
         thinkingEl.classList.add('streaming');
     }
 
-    var streamRenderTimer = null;
-
     function appendStreamChunk(chunk) {
-        if (!streamingContent) return;
+        if (!streamTextNode) return;
         streamBuffer += chunk;
 
-        // Debounce: 60fps max, batch chunks
-        if (streamRenderTimer) return;
-        streamRenderTimer = requestAnimationFrame(function() {
-            streamRenderTimer = null;
-            if (!streamingContent) return;
+        // Append text only — zero DOM destruction, zero flicker
+        streamTextNode.textContent = streamBuffer;
 
-            // Use lighter rendering during streaming (no line numbers)
-            var rendered = renderStreamingMarkdown(streamBuffer);
-            streamingContent.innerHTML = rendered;
-
-            if (!userScrolledUp) {
-                stepsArea.scrollTop = stepsArea.scrollHeight;
-            }
-        });
+        // Throttle scroll to every 3rd chunk
+        if (!userScrolledUp && streamBuffer.length % 3 === 0) {
+            stepsArea.scrollTop = stepsArea.scrollHeight;
+        }
     }
 
     function endStream() {
-        // Flush any pending render
         if (streamRenderTimer) {
             clearTimeout(streamRenderTimer);
             streamRenderTimer = null;
@@ -1006,9 +1006,13 @@
         if (streamingStep) {
             streamingContent.classList.remove('streaming');
 
-            // Final render with syntax highlighting
+            // Replace plain text with full markdown render (one-time)
             streamingContent.innerHTML = renderMarkdown(streamBuffer);
             addCodeActions(streamingContent);
+
+            // Cleanup references
+            streamTextNode = null;
+            streamPlainDiv = null;
 
             // 添加 response actions
             var actions = document.createElement('div');
@@ -1037,6 +1041,8 @@
             streamingContent.classList.remove('streaming');
             streamingContent.innerHTML = renderMarkdown(streamBuffer + '\n\n*[Cancelled]*');
         }
+        streamTextNode = null;
+        streamPlainDiv = null;
         streamingStep = null;
         streamingContent = null;
         streamBuffer = '';
