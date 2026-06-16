@@ -4,6 +4,7 @@ import { ChatViewProvider } from './chatPanel';
 import { CompletionProvider } from './completionProvider';
 import { FileSystemProvider } from './fileSystem';
 import { ModeManager } from './modeManager';
+import { DecorationManager } from './decorationManager';
 import { getConfig, validateConfig } from './config';
 
 let client: DifyClient;
@@ -11,6 +12,7 @@ let completionProvider: CompletionProvider;
 let chatViewProvider: ChatViewProvider;
 let fileSystem: FileSystemProvider;
 let modeManager: ModeManager;
+let decorationManager: DecorationManager;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
@@ -20,9 +22,10 @@ export function activate(context: vscode.ExtensionContext) {
     client = new DifyClient(config);
     fileSystem = new FileSystemProvider();
     modeManager = new ModeManager();
+    decorationManager = new DecorationManager();
 
     // 注册侧边栏视图
-    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager);
+    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             ChatViewProvider.viewType,

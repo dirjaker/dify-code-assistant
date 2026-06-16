@@ -3,6 +3,7 @@ import { DifyClient } from './difyClient';
 import { FileSystemProvider } from './fileSystem';
 import { ModeManager, AgentMode } from './modeManager';
 import { ToolExecutor, ToolCall, ToolResult } from './toolExecutor';
+import { DecorationManager } from './decorationManager';
 import { diffToHtml, FileDiff } from './diffEngine';
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
@@ -13,16 +14,20 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _modeManager: ModeManager;
     private _toolExecutor: ToolExecutor;
 
+    private _decorationManager: DecorationManager;
+
     constructor(
         private readonly _extensionUri: vscode.Uri,
         client: DifyClient,
         fs: FileSystemProvider,
-        modeManager: ModeManager
+        modeManager: ModeManager,
+        decorationManager: DecorationManager
     ) {
         this._client = client;
         this._fs = fs;
         this._modeManager = modeManager;
-        this._toolExecutor = new ToolExecutor(fs, modeManager);
+        this._decorationManager = decorationManager;
+        this._toolExecutor = new ToolExecutor(fs, modeManager, decorationManager);
     }
 
     public resolveWebviewView(

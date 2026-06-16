@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { FileSystemProvider } from './fileSystem';
 import { generateDiff, diffToHtml, diffToText, FileDiff } from './diffEngine';
 import { ModeManager } from './modeManager';
+import { DecorationManager } from './decorationManager';
 
 /**
  * AI 工具调用协议
@@ -27,11 +28,13 @@ export interface ToolResult {
 export class ToolExecutor {
     private fs: FileSystemProvider;
     private modeManager: ModeManager;
+    private decorationManager: DecorationManager;
     private pendingWrites: Map<string, { oldContent: string; newContent: string; reason: string }> = new Map();
 
-    constructor(fs: FileSystemProvider, modeManager: ModeManager) {
+    constructor(fs: FileSystemProvider, modeManager: ModeManager, decorationManager: DecorationManager) {
         this.fs = fs;
         this.modeManager = modeManager;
+        this.decorationManager = decorationManager;
     }
 
     /**
@@ -39,7 +42,6 @@ export class ToolExecutor {
      */
     parseToolCalls(response: string): ToolCall[] {
         const calls: ToolCall[] = [];
-        // 匹配 ```action ... ``` 代码块
         const regex = /```action\s*\n([\s\S]*?)```/g;
         let match;
 
@@ -96,17 +98,34 @@ export class ToolExecutor {
     }
 
     /**
-     * 确认并应用写入
+     * 确认并应用写入 — 写入文件 + 打开编辑器 + 高亮变更
      */
     async applyPendingWrite(filePath: string): Promise<boolean> {
         const pending = this.pendingWrites.get(filePath);
         if (!pending) { return false; }
 
+        const root = this.fs.getWorkspaceRoot();
+        if (!root) { return false; }
+
+        const absolutePath = filePath.startsWith('/') ? filePath : `${root}/${filePath}`;
+        const uri = vscode.Uri.file(absolutePath);
+
+        // 1. 写入文件
         const success = await this.fs.writeFile(filePath, pending.newContent);
-        if (success) {
-            this.pendingWrites.delete(filePath);
-        }
-        return success;
+        if (!success) { return false; }
+
+        // 2. 打开文件到编辑器
+        const document = await vscode.workspace.openTextDocument(uri);
+        const editor = await vscode.window.showTextDocument(document, { preview: false });
+
+        // 3. 计算 diff 并高亮
+        const diff = generateDiff(pending.oldContent, pending.newContent, filePath);
+        this.applyDiffDecorations(editor, diff);
+
+        // 4. 清除 pending
+        this.pendingWrites.delete(filePath);
+
+        return true;
     }
 
     /**
@@ -126,13 +145,29 @@ export class ToolExecutor {
             const success = await this.fs.writeFile(filePath, pending.newContent);
             if (success) {
                 applied.push(filePath);
+                // 打开并高亮
+                const root = this.fs.getWorkspaceRoot();
+                if (root) {
+                    const absolutePath = filePath.startsWith('/') ? filePath : `${root}/${filePath}`;
+                    const uri = vscode.Uri.file(absolutePath);
+                    const doc = await vscode.workspace.openTextDocument(uri);
+                    const editor = await vscode.window.showTextDocument(doc, { preview: false });
+                    const diff = generateDiff(pending.oldContent, pending.newContent, filePath);
+                    this.applyDiffDecorations(editor, diff);
+                }
             }
         }
-        // 清除已应用的
         for (const f of applied) {
             this.pendingWrites.delete(f);
         }
         return applied;
+    }
+
+    /**
+     * 清除所有高亮
+     */
+    clearAllDecorations(): void {
+        this.decorationManager.clearAllDecorations();
     }
 
     // --- 内部执行 ---
@@ -154,10 +189,9 @@ export class ToolExecutor {
 
     private async executeWriteFile(filePath: string, content: string, reason: string): Promise<ToolResult> {
         if (!this.modeManager.canWriteFiles()) {
-            return { type: 'write_file', success: false, data: 'Write not allowed in current mode' };
+            return { type: 'write_file', success: false, data: 'Write not allowed in current mode. Switch to Agent mode.' };
         }
 
-        // 读取旧内容生成 diff
         const oldFile = await this.fs.readFile(filePath);
         const oldContent = oldFile?.content || '';
         const diff = generateDiff(oldContent, content, filePath);
@@ -168,7 +202,7 @@ export class ToolExecutor {
         return {
             type: 'write_file',
             success: true,
-            data: `Pending write to ${filePath} (${diff.additions} additions, ${diff.deletions} deletions). Awaiting user confirmation.`,
+            data: `Pending write to ${filePath} (+${diff.additions} -${diff.deletions}). Awaiting confirmation.`,
             diff
         };
     }
@@ -204,7 +238,6 @@ export class ToolExecutor {
         if (selectedText) {
             data += `\nSelected code:\n\`\`\`${editor.language}\n${selectedText}\n\`\`\``;
         } else {
-            // 发送完整文件内容（限制行数）
             const lines = editor.content.split('\n');
             const truncated = lines.length > 100;
             const preview = lines.slice(0, 100).map((l, i) => `${i + 1} | ${l}`).join('\n');
@@ -213,5 +246,29 @@ export class ToolExecutor {
         }
 
         return { type: 'get_editor', success: true, data };
+    }
+
+    /**
+     * 将 diff 转换为编辑器装饰
+     */
+    private applyDiffDecorations(editor: vscode.TextEditor, diff: FileDiff): void {
+        const addedLines: number[] = [];
+        const removedLines: number[] = [];
+        let lineNum = 0;
+
+        for (const hunk of diff.hunks) {
+            if (hunk.type === 'add') {
+                addedLines.push(lineNum);
+                lineNum++;
+            } else if (hunk.type === 'remove') {
+                removedLines.push(lineNum);
+                // remove 行不增加 lineNum（已从文件中删除）
+            } else {
+                lineNum++;
+            }
+        }
+
+        const uri = editor.document.uri;
+        this.decorationManager.highlightDiff(uri, addedLines, removedLines);
     }
 }
