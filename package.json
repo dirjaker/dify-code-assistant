@@ -38,32 +38,32 @@
     "commands": [
       {
         "command": "dify.openChat",
-        "title": "打开 AI 助手",
+        "title": "Open AI Assistant",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "dify.explainCode",
-        "title": "AI: 解释代码",
+        "title": "AI: Explain Code",
         "icon": "$(book)"
       },
       {
         "command": "dify.refactorCode",
-        "title": "AI: 重构代码",
+        "title": "AI: Refactor Code",
         "icon": "$(wrench)"
       },
       {
         "command": "dify.fixCode",
-        "title": "AI: 修复代码",
+        "title": "AI: Fix Code",
         "icon": "$(bug)"
       },
       {
         "command": "dify.completeCode",
-        "title": "AI: 生成代码",
+        "title": "AI: Generate Code",
         "icon": "$(sparkle)"
       },
       {
         "command": "dify.settings",
-        "title": "AI: 设置",
+        "title": "AI: Settings",
         "icon": "$(gear)"
       }
     ],
