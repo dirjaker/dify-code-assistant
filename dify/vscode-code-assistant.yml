@@ -1,0 +1,128 @@
+app:
+  description: 配合 dify-code-assistant 插件使用的编程助手，支持代码解释、补全、Debug 和重构
+  icon: 💻
+  icon_background: '#E4FBCC'
+  icon_type: emoji
+  mode: chat
+  name: VS Code 代码助手
+  use_icon_as_answer_icon: false
+dependencies:
+- current_identifier: null
+  type: marketplace
+  value:
+    marketplace_plugin_unique_identifier: langgenius/deepseek:0.0.17@f7a5c1d222d17ee419b17a80d6e4923838fe93788dc724a3af73fbc6990b3a32
+    version: null
+kind: app
+model_config:
+  agent_mode:
+    enabled: false
+    strategy: router
+    tools: []
+  annotation_reply:
+    enabled: false
+  chat_prompt_config: {}
+  completion_prompt_config: {}
+  dataset_configs:
+    datasets:
+      datasets: []
+      strategy: router
+    retrieval_model: single
+  dataset_query_variable: null
+  external_data_tools: []
+  file_upload:
+    image:
+      enabled: false
+  model:
+    completion_params:
+      max_tokens: 4096
+      stop: []
+      temperature: 0.3
+    mode: chat
+    name: deepseek-v4-pro
+    provider: langgenius/deepseek/deepseek
+  more_like_this:
+    enabled: false
+  opening_statement: '👋 你好！我是 VS Code 代码助手，可以帮你：
+
+    - 💡 解释代码逻辑
+
+    - ✍️ 补全/生成代码
+
+    - 🐛 调试和修复错误
+
+    - ♻️ 重构优化代码
+
+
+    直接粘贴代码或描述你的需求即可！'
+  pre_prompt: '你是一个专业的 AI 编程助手，运行在 VS Code 编辑器中。你的职责是帮助开发者高效完成编程任务。
+
+
+    ## 能力要求
+
+
+    ### 代码解释
+
+    - 逐行解释代码逻辑，标注关键变量和函数的作用
+
+    - 说明设计模式和架构决策
+
+    - 指出潜在的性能问题或安全隐患
+
+
+    ### 代码补全
+
+    - 根据上下文生成完整、可运行的代码
+
+    - 遵循项目现有的代码风格和命名规范
+
+    - 添加必要的类型注解和文档字符串
+
+
+    ### Debug 调试
+
+    - 分析错误信息，定位问题根因
+
+    - 提供修复方案并解释修复原因
+
+    - 建议添加防御性编程措施
+
+
+    ### 代码重构
+
+    - 在不改变行为的前提下优化代码结构
+
+    - 提取重复逻辑为公共函数
+
+    - 改善可读性和可维护性
+
+
+    ## 回答规范
+
+
+    1. 代码块使用 Markdown 格式，标注语言类型
+
+    2. 修改现有代码时，输出完整文件或明确标注修改部分
+
+    3. 涉及多个文件时，按文件名分组展示
+
+    4. 简单问题简洁回答，复杂问题详细解释
+
+    5. 如果不确定，诚实说明并给出可能的解决方案
+
+    6. 默认使用中文回答，代码注释也使用中文'
+  prompt_type: simple
+  retriever_resource:
+    enabled: true
+  sensitive_word_avoidance:
+    enabled: false
+  speech_to_text:
+    enabled: false
+  suggested_questions: []
+  suggested_questions_after_answer:
+    enabled: true
+  text_to_speech:
+    enabled: false
+    language: ''
+    voice: ''
+  user_input_form: []
+version: 0.6.0
