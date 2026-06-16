@@ -1,6 +1,22 @@
 # Dify Code Assistant
 
-基于 [Dify](https://dify.ai) 的 VS Code AI 编程助手，支持智能对话、代码补全、代码解释和重构。
+<p align="center">
+  <img src="assets/banner.svg" alt="Dify Code Assistant" width="100%">
+</p>
+
+<p align="center">
+  <strong>基于 Dify 的 VS Code AI 编程助手</strong>
+</p>
+
+<p align="center">
+  <a href="#-功能特性">功能</a> •
+  <a href="#-安装">安装</a> •
+  <a href="#-配置">配置</a> •
+  <a href="#-使用方法">使用</a> •
+  <a href="#-开发">开发</a>
+</p>
+
+---
 
 ## ✨ 功能特性
 
@@ -102,6 +118,8 @@ dify-code-assistant/
 │   ├── icon.png           # 插件图标
 │   ├── icon.svg           # 插件图标（矢量）
 │   └── sidebar-icon.svg   # 侧边栏图标
+├── assets/                 # 静态资源
+│   └── banner.svg         # 项目 Banner
 ├── dify/                   # Dify 配置
 │   ├── README.md          # Dify 配置说明
 │   └── vscode-code-assistant.yml  # 预配置 DSL
