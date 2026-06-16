@@ -2,21 +2,27 @@ import * as vscode from 'vscode';
 import { DifyClient } from './difyClient';
 import { ChatViewProvider } from './chatPanel';
 import { CompletionProvider } from './completionProvider';
+import { FileSystemProvider } from './fileSystem';
+import { ModeManager } from './modeManager';
 import { getConfig, validateConfig } from './config';
 
 let client: DifyClient;
 let completionProvider: CompletionProvider;
 let chatViewProvider: ChatViewProvider;
+let fileSystem: FileSystemProvider;
+let modeManager: ModeManager;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
 
-    // Initialize client
+    // 初始化核心组件
     const config = getConfig();
     client = new DifyClient(config);
+    fileSystem = new FileSystemProvider();
+    modeManager = new ModeManager();
 
-    // Register chat view provider (sidebar)
-    chatViewProvider = new ChatViewProvider(context.extensionUri, client);
+    // 注册侧边栏视图
+    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             ChatViewProvider.viewType,
@@ -29,19 +35,19 @@ export function activate(context: vscode.ExtensionContext) {
         )
     );
 
-    // Register completion provider
+    // 注册代码补全
     completionProvider = new CompletionProvider(client);
-    const completionDisposable = vscode.languages.registerInlineCompletionItemProvider(
-        { pattern: '**' },
-        completionProvider
+    context.subscriptions.push(
+        vscode.languages.registerInlineCompletionItemProvider(
+            { pattern: '**' },
+            completionProvider
+        )
     );
-    context.subscriptions.push(completionDisposable);
 
-    // Register commands
+    // 注册命令
     context.subscriptions.push(
         vscode.commands.registerCommand('dify.openChat', () => {
             checkConfigAndRun(() => {
-                // 聚焦到侧边栏的聊天视图
                 vscode.commands.executeCommand('difyChatView.focus');
             });
         })
@@ -77,7 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Watch for config changes
+    // 监听配置变更
     context.subscriptions.push(
         vscode.workspace.onDidChangeConfiguration((e) => {
             if (e.affectsConfiguration('dify')) {
@@ -88,13 +94,13 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // Status bar
+    // 状态栏
     const statusBarItem = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Right,
         100
     );
     statusBarItem.text = "$(comment-discussion) Dify";
-    statusBarItem.tooltip = "打开 Dify AI 助手";
+    statusBarItem.tooltip = "Open Dify AI Assistant";
     statusBarItem.command = 'dify.openChat';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
@@ -104,8 +110,8 @@ function checkConfigAndRun(fn: () => void): void {
     const config = getConfig();
     const error = validateConfig(config);
     if (error) {
-        vscode.window.showErrorMessage(error, '打开设置').then((selection) => {
-            if (selection === '打开设置') {
+        vscode.window.showErrorMessage(error, 'Open Settings').then((selection) => {
+            if (selection === 'Open Settings') {
                 vscode.commands.executeCommand('workbench.action.openSettings', 'dify');
             }
         });
@@ -117,7 +123,7 @@ function checkConfigAndRun(fn: () => void): void {
 async function handleCodeAction(action: 'explain' | 'refactor' | 'fix' | 'complete'): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-        vscode.window.showWarningMessage('请先打开一个文件');
+        vscode.window.showWarningMessage('No active editor');
         return;
     }
 
@@ -125,45 +131,25 @@ async function handleCodeAction(action: 'explain' | 'refactor' | 'fix' | 'comple
     const selectedText = editor.document.getText(selection);
 
     if (!selectedText && action !== 'complete') {
-        vscode.window.showWarningMessage('请先选中代码');
+        vscode.window.showWarningMessage('Select code first');
         return;
     }
 
     const languageId = editor.document.languageId;
+    const fileName = editor.document.fileName.split(/[/\\]/).pop() || '';
+
     const prompts: Record<string, string> = {
-        explain: `请详细解释以下 ${languageId} 代码的作用和逻辑：\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\``,
-        refactor: `请重构以下 ${languageId} 代码，提高可读性和性能：\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\`\n\n请提供重构后的代码并解释改进点。`,
-        fix: `请找出并修复以下 ${languageId} 代码中的问题：\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\`\n\n请提供修复后的代码并解释问题原因。`,
-        complete: selectedText 
-            ? `请根据以下代码上下文，补全或生成代码：\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\``
-            : `请帮我生成 ${languageId} 代码。`
+        explain: `Explain the following ${languageId} code from ${fileName}:\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\``,
+        refactor: `Refactor this ${languageId} code from ${fileName} to improve readability and performance:\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\`\n\nProvide the refactored code and explain the improvements.`,
+        fix: `Find and fix bugs in this ${languageId} code from ${fileName}:\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\`\n\nProvide the fixed code and explain the issues.`,
+        complete: selectedText
+            ? `Complete or generate code based on this ${languageId} context from ${fileName}:\n\n\`\`\`${languageId}\n${selectedText}\n\`\`\``
+            : `Generate ${languageId} code.`
     };
 
-    // 确保聊天视图可见
     await vscode.commands.executeCommand('difyChatView.focus');
-    
-    // 发送消息到聊天视图
     setTimeout(async () => {
         chatViewProvider.sendToChat(prompts[action], 'user');
-        
-        // 触发 AI 响应
-        try {
-            const systemPrompt = `你是一个专业的 AI 编程助手，运行在 VS Code 编辑器中。你的职责是帮助开发者高效完成编程任务。
-
-## 回答规范
-
-1. 代码块使用 Markdown 格式，标注语言类型
-2. 修改现有代码时，输出完整文件或明确标注修改部分
-3. 涉及多个文件时，按文件名分组展示
-4. 简单问题简洁回答，复杂问题详细解释
-5. 如果不确定，诚实说明并给出可能的解决方案
-6. 默认使用中文回答，代码注释也使用中文`;
-
-            const response = await client.chat(prompts[action], systemPrompt);
-            chatViewProvider.sendToChat(response.answer, 'assistant');
-        } catch (error: any) {
-            chatViewProvider.sendToChat(`❌ 错误: ${error.message}`, 'error');
-        }
     }, 300);
 }
 
