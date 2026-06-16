@@ -93,7 +93,7 @@
     sendBtnEl.addEventListener('click', function(e) { e.preventDefault(); doSend(); });
 
     inputEl.addEventListener('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); doSend(); }
     });
 
     inputEl.addEventListener('input', function() {
@@ -378,12 +378,69 @@
     // ═══════════════════════════════════════
     // Message Handler
     // ═══════════════════════════════════════
+    // Streaming State
+    // ═══════════════════════════════════════
+
+    var streamingStep = null;
+    var streamingContent = null;
+    var streamBuffer = '';
+
+    function startStream() {
+        welcomeEl.style.display = 'none';
+
+        streamingStep = document.createElement('div');
+        streamingStep.className = 'step assistant';
+
+        streamingContent = document.createElement('div');
+        streamingContent.className = 'step-content';
+
+        streamingStep.appendChild(streamingContent);
+        stepsArea.insertBefore(streamingStep, thinkingEl);
+        streamBuffer = '';
+    }
+
+    function appendStreamChunk(chunk) {
+        if (!streamingContent) return;
+        streamBuffer += chunk;
+        streamingContent.innerHTML = renderMarkdown(streamBuffer);
+        addCodeActions(streamingContent);
+        stepsArea.scrollTop = stepsArea.scrollHeight;
+    }
+
+    function endStream() {
+        if (streamingStep) {
+            // 添加 response actions
+            var actions = document.createElement('div');
+            actions.className = 'response-actions';
+
+            var copyBtn = createActionButton('Copy', function() {
+                vscode.postMessage({ command: 'copyCode', code: streamBuffer });
+            });
+            actions.appendChild(copyBtn);
+
+            streamingStep.appendChild(actions);
+        }
+        streamingStep = null;
+        streamingContent = null;
+        streamBuffer = '';
+    }
+
+    // ═══════════════════════════════════════
 
     window.addEventListener('message', function(event) {
         var msg = event.data;
         switch (msg.command) {
             case 'receiveMessage':
                 appendStep(msg.text, msg.role);
+                break;
+            case 'startStream':
+                startStream();
+                break;
+            case 'streamChunk':
+                appendStreamChunk(msg.chunk);
+                break;
+            case 'endStream':
+                endStream();
                 break;
             case 'startThinking':
                 thinkingEl.classList.add('show');
