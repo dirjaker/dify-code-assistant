@@ -5,7 +5,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'difyChatView';
     private _view?: vscode.WebviewView;
     private _client: DifyClient;
-    private _chatHistory: Array<{role: string, content: string}> = [];
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -26,7 +25,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             localResourceRoots: [this._extensionUri]
         };
 
-        webviewView.webview.html = this._getHtml();
+        webviewView.webview.html = this._getHtml(webviewView.webview);
 
         // 处理来自 webview 的消息
         webviewView.webview.onDidReceiveMessage(async (message) => {
@@ -35,7 +34,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     await this._handleMessage(message.text);
                     break;
                 case 'clearChat':
-                    this._chatHistory = [];
                     this._client.resetConversation();
                     this._view?.webview.postMessage({ command: 'clearChat' });
                     break;
@@ -44,10 +42,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'copyCode':
                     await vscode.env.clipboard.writeText(message.code);
-                    vscode.window.showInformationMessage('代码已复制到剪贴板');
+                    vscode.window.showInformationMessage('代码已复制');
                     break;
-                case 'ready':
-                    // Webview 已准备好
+                case 'openSettings':
+                    vscode.commands.executeCommand('workbench.action.openSettings', 'dify');
                     break;
             }
         });
@@ -55,76 +53,51 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         // 当视图可见时聚焦输入框
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
-                webviewView.webview.postMessage({ command: 'focusInput' });
+                this._postMessage({ command: 'focusInput' });
             }
         });
     }
 
-    public sendToChat(text: string, role: string = 'system'): void {
+    private _postMessage(message: any): void {
         if (this._view) {
-            this._view.webview.postMessage({
-                command: 'receiveMessage',
-                text: text,
-                role: role
-            });
+            this._view.webview.postMessage(message);
         }
     }
 
+    public sendToChat(text: string, role: string = 'system'): void {
+        this._postMessage({
+            command: 'receiveMessage',
+            text: text,
+            role: role
+        });
+    }
+
     private async _handleMessage(text: string): Promise<void> {
-        this._chatHistory.push({ role: 'user', content: text });
-        this._view?.webview.postMessage({ command: 'startThinking' });
+        this._postMessage({ command: 'startThinking' });
 
         try {
-            const systemPrompt = `你是一个专业的 AI 编程助手，运行在 VS Code 编辑器中。你的职责是帮助开发者高效完成编程任务。
+            const systemPrompt = `你是一个专业的 AI 编程助手。请用中文回答问题。
 
-## 能力要求
-
-### 代码解释
-- 逐行解释代码逻辑，标注关键变量和函数的作用
-- 说明设计模式和架构决策
-- 指出潜在的性能问题或安全隐患
-
-### 代码补全
-- 根据上下文生成完整、可运行的代码
-- 遵循项目现有的代码风格和命名规范
-- 添加必要的类型注解和文档字符串
-
-### Debug 调试
-- 分析错误信息，定位问题根因
-- 提供修复方案并解释修复原因
-- 建议添加防御性编程措施
-
-### 代码重构
-- 在不改变行为的前提下优化代码结构
-- 提取重复逻辑为公共函数
-- 改善可读性和可维护性
-
-## 回答规范
-
+回答规范：
 1. 代码块使用 Markdown 格式，标注语言类型
-2. 修改现有代码时，输出完整文件或明确标注修改部分
-3. 涉及多个文件时，按文件名分组展示
-4. 简单问题简洁回答，复杂问题详细解释
-5. 如果不确定，诚实说明并给出可能的解决方案
-6. 默认使用中文回答，代码注释也使用中文`;
+2. 简单问题简洁回答，复杂问题详细解释
+3. 如果不确定，诚实说明`;
 
             const response = await this._client.chat(text, systemPrompt);
-            this._chatHistory.push({ role: 'assistant', content: response.answer });
 
-            this._view?.webview.postMessage({
+            this._postMessage({
                 command: 'receiveMessage',
                 text: response.answer,
-                role: 'assistant',
-                metadata: response.metadata
+                role: 'assistant'
             });
         } catch (error: any) {
-            this._view?.webview.postMessage({
+            this._postMessage({
                 command: 'receiveMessage',
-                text: `❌ 错误: ${error.message}`,
+                text: '错误: ' + error.message,
                 role: 'error'
             });
         } finally {
-            this._view?.webview.postMessage({ command: 'stopThinking' });
+            this._postMessage({ command: 'stopThinking' });
         }
     }
 
@@ -140,368 +113,223 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         }
     }
 
-    private _getHtml(): string {
-        return `<!DOCTYPE html>
+    private _getHtml(webview: vscode.Webview): string {
+        return /*html*/`<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline' vscode-resource:; script-src 'unsafe-inline' vscode-resource:;">
-    <title>Dify Code Assistant</title>
+    <title>Dify AI</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            --bg-primary: var(--vscode-sideBar-background, #1e1e1e);
-            --bg-secondary: var(--vscode-editor-background, #252526);
-            --bg-input: var(--vscode-input-background, #3c3c3c);
-            --text-primary: var(--vscode-foreground, #cccccc);
-            --text-secondary: var(--vscode-descriptionForeground, #999999);
-            --text-input: var(--vscode-input-foreground, #cccccc);
-            --border-color: var(--vscode-panel-border, #3c3c3c);
-            --accent-color: var(--vscode-button-background, #0e639c);
-            --accent-hover: var(--vscode-button-hoverBackground, #1177bb);
-            --accent-text: var(--vscode-button-foreground, #ffffff);
-            --user-bubble: var(--vscode-button-background, #0e639c);
-            --user-text: var(--vscode-button-foreground, #ffffff);
-            --assistant-bubble: var(--vscode-editor-inactiveSelectionBackground, #2a2d2e);
-            --error-color: var(--vscode-errorForeground, #f44747);
-            --code-bg: var(--vscode-textCodeBlock-background, #1e1e1e);
-            --focus-border: var(--vscode-focusBorder, #007fd4);
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
-            font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+            font-family: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
             font-size: var(--vscode-font-size, 13px);
-            color: var(--text-primary);
-            background: var(--bg-primary);
+            color: var(--vscode-foreground, #ccc);
+            background: var(--vscode-sideBar-background, #1e1e1e);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
-        /* 顶部工具栏 */
+        /* 工具栏 */
         .toolbar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 8px 12px;
-            background: var(--bg-secondary);
-            border-bottom: 1px solid var(--border-color);
-            flex-shrink: 0;
-        }
-
-        .toolbar-left {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            background: var(--vscode-titleBar-activeBackground, #333);
+            border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
         }
 
         .toolbar-title {
             font-size: 12px;
             font-weight: 600;
-            color: var(--text-primary);
-        }
-
-        .toolbar-badge {
-            font-size: 10px;
-            padding: 2px 6px;
-            background: var(--accent-color);
-            color: var(--accent-text);
-            border-radius: 10px;
-        }
-
-        .toolbar-actions {
-            display: flex;
-            gap: 4px;
         }
 
         .toolbar-btn {
             background: none;
             border: none;
-            color: var(--text-secondary);
+            color: var(--vscode-foreground, #ccc);
             cursor: pointer;
-            padding: 4px 6px;
+            padding: 4px 8px;
             border-radius: 4px;
-            font-size: 14px;
+            font-size: 16px;
             line-height: 1;
-            transition: all 0.15s ease;
         }
 
         .toolbar-btn:hover {
             background: var(--vscode-toolbar-hoverBackground, rgba(255,255,255,0.1));
-            color: var(--text-primary);
         }
 
-        /* 消息容器 */
-        .messages-container {
+        /* 消息区 */
+        .messages {
             flex: 1;
             overflow-y: auto;
             padding: 12px;
-            scroll-behavior: smooth;
         }
 
-        .messages-container::-webkit-scrollbar {
-            width: 6px;
-        }
+        .messages::-webkit-scrollbar { width: 6px; }
+        .messages::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, #666); border-radius: 3px; }
 
-        .messages-container::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .messages-container::-webkit-scrollbar-thumb {
-            background: var(--border-color);
-            border-radius: 3px;
-        }
-
-        .messages-container::-webkit-scrollbar-thumb:hover {
-            background: var(--text-secondary);
-        }
-
-        /* 欢迎页面 */
+        /* 欢迎 */
         .welcome {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            padding: 24px;
             text-align: center;
+            padding: 40px 20px;
         }
 
-        .welcome-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-            opacity: 0.8;
-        }
+        .welcome-icon { font-size: 48px; margin-bottom: 16px; }
+        .welcome-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .welcome-desc { font-size: 12px; color: var(--vscode-descriptionForeground, #999); margin-bottom: 20px; }
 
-        .welcome-title {
-            font-size: 16px;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-
-        .welcome-desc {
-            font-size: 12px;
-            color: var(--text-secondary);
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
-
-        .welcome-features {
+        .quick-actions {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
-            width: 100%;
-            max-width: 280px;
         }
 
-        .feature-item {
+        .quick-btn {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 10px 12px;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border-color);
+            padding: 10px;
+            background: var(--vscode-editor-background, #252526);
+            border: 1px solid var(--vscode-panel-border, #3c3c3c);
             border-radius: 8px;
-            font-size: 12px;
+            color: var(--vscode-foreground, #ccc);
             cursor: pointer;
-            transition: all 0.15s ease;
+            font-size: 12px;
+            text-align: left;
         }
 
-        .feature-item:hover {
-            border-color: var(--accent-color);
-            background: var(--bg-input);
+        .quick-btn:hover {
+            border-color: var(--vscode-focusBorder, #007fd4);
+            background: var(--vscode-list-hoverBackground, #2a2d2e);
         }
 
-        .feature-icon {
-            font-size: 16px;
-        }
+        .quick-btn-icon { font-size: 18px; }
 
-        /* 消息样式 */
-        .message {
-            margin-bottom: 12px;
-            animation: fadeIn 0.2s ease;
-        }
+        /* 消息 */
+        .msg { margin-bottom: 16px; }
 
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(4px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .message-header {
+        .msg-header {
             display: flex;
             align-items: center;
             gap: 6px;
             margin-bottom: 6px;
         }
 
-        .message-avatar {
-            width: 20px;
-            height: 20px;
+        .msg-avatar {
+            width: 22px;
+            height: 22px;
             border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 11px;
-            flex-shrink: 0;
+            font-size: 12px;
         }
 
-        .message.user .message-avatar {
-            background: var(--accent-color);
-            color: var(--accent-text);
-        }
+        .msg.user .msg-avatar { background: var(--vscode-button-background, #0e639c); }
+        .msg.bot .msg-avatar { background: #7c3aed; }
+        .msg.error .msg-avatar { background: var(--vscode-errorForeground, #f44747); }
 
-        .message.assistant .message-avatar {
-            background: #8b5cf6;
-            color: white;
-        }
+        .msg-name { font-size: 11px; font-weight: 600; }
 
-        .message.error .message-avatar {
-            background: var(--error-color);
-            color: white;
-        }
-
-        .message-role {
-            font-size: 11px;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .message-time {
-            font-size: 10px;
-            color: var(--text-secondary);
-            margin-left: auto;
-        }
-
-        .message-content {
+        .msg-body {
+            margin-left: 28px;
             padding: 10px 12px;
             border-radius: 8px;
             line-height: 1.6;
-            word-wrap: break-word;
-            font-size: 13px;
         }
 
-        .message.user .message-content {
-            background: var(--user-bubble);
-            color: var(--user-text);
-            margin-left: 26px;
+        .msg.user .msg-body {
+            background: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #fff);
         }
 
-        .message.assistant .message-content {
-            background: var(--assistant-bubble);
-            color: var(--text-primary);
-            margin-left: 26px;
+        .msg.bot .msg-body {
+            background: var(--vscode-editor-inactiveSelectionBackground, #2a2d2e);
         }
 
-        .message.error .message-content {
+        .msg.error .msg-body {
             background: rgba(244, 71, 71, 0.1);
-            color: var(--error-color);
+            color: var(--vscode-errorForeground, #f44747);
             border: 1px solid rgba(244, 71, 71, 0.3);
-            margin-left: 26px;
         }
 
-        /* 代码块样式 */
-        .message-content pre {
-            background: var(--code-bg);
-            border: 1px solid var(--border-color);
+        /* 代码块 */
+        .msg-body pre {
+            background: var(--vscode-textCodeBlock-background, #1e1e1e);
+            border: 1px solid var(--vscode-panel-border, #3c3c3c);
             border-radius: 6px;
-            padding: 12px;
             margin: 8px 0;
-            overflow-x: auto;
-            position: relative;
+            overflow: hidden;
         }
 
-        .message-content code {
-            font-family: var(--vscode-editor-font-family, 'Fira Code', 'Consolas', monospace);
-            font-size: 12px;
-            line-height: 1.5;
-        }
-
-        .message-content pre code {
-            display: block;
-            white-space: pre;
-        }
-
-        .message-content p code {
-            background: var(--code-bg);
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 12px;
-        }
-
-        .code-header {
+        .code-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
             padding: 6px 12px;
-            background: rgba(0,0,0,0.2);
-            border-bottom: 1px solid var(--border-color);
-            margin: -12px -12px 8px -12px;
-            border-radius: 6px 6px 0 0;
+            background: rgba(0,0,0,0.3);
+            border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
         }
 
-        .code-lang {
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-weight: 500;
-        }
+        .code-lang { font-size: 11px; color: var(--vscode-descriptionForeground, #999); }
 
-        .code-actions {
-            display: flex;
-            gap: 4px;
-        }
-
-        .code-btn {
+        .code-copy {
             background: none;
             border: none;
-            color: var(--text-secondary);
+            color: var(--vscode-descriptionForeground, #999);
             cursor: pointer;
+            font-size: 11px;
             padding: 2px 8px;
             border-radius: 4px;
-            font-size: 11px;
-            transition: all 0.15s ease;
         }
 
-        .code-btn:hover {
+        .code-copy:hover {
             background: rgba(255,255,255,0.1);
-            color: var(--text-primary);
+            color: var(--vscode-foreground, #ccc);
         }
 
-        /* 思考状态 */
+        .msg-body code {
+            font-family: var(--vscode-editor-font-family, monospace);
+            font-size: 12px;
+        }
+
+        .msg-body pre code {
+            display: block;
+            padding: 12px;
+            overflow-x: auto;
+        }
+
+        .msg-body p code {
+            background: var(--vscode-textCodeBlock-background, #1e1e1e);
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        /* 思考中 */
         .thinking {
             display: none;
             padding: 8px 12px;
-            margin-left: 26px;
+            margin-left: 28px;
         }
 
-        .thinking.active {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
+        .thinking.show { display: flex; align-items: center; gap: 8px; }
 
-        .thinking-dots {
-            display: flex;
-            gap: 4px;
-        }
-
-        .thinking-dot {
+        .dot {
             width: 6px;
             height: 6px;
-            background: var(--accent-color);
+            background: var(--vscode-button-background, #0e639c);
             border-radius: 50%;
             animation: bounce 1.4s infinite ease-in-out;
         }
 
-        .thinking-dot:nth-child(1) { animation-delay: -0.32s; }
-        .thinking-dot:nth-child(2) { animation-delay: -0.16s; }
+        .dot:nth-child(2) { animation-delay: 0.16s; }
+        .dot:nth-child(3) { animation-delay: 0.32s; }
 
         @keyframes bounce {
             0%, 80%, 100% { transform: scale(0); }
@@ -510,29 +338,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         .thinking-text {
             font-size: 12px;
-            color: var(--text-secondary);
-            font-style: italic;
+            color: var(--vscode-descriptionForeground, #999);
         }
 
-        /* 输入区域 */
-        .input-container {
+        /* 输入区 */
+        .input-area {
             padding: 12px;
-            border-top: 1px solid var(--border-color);
-            background: var(--bg-primary);
-            flex-shrink: 0;
+            border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
         }
 
-        .input-wrapper {
+        .input-row {
             display: flex;
             gap: 8px;
             align-items: flex-end;
         }
 
-        .input-field {
+        #userInput {
             flex: 1;
-            background: var(--bg-input);
-            color: var(--text-input);
-            border: 1px solid var(--border-color);
+            background: var(--vscode-input-background, #3c3c3c);
+            color: var(--vscode-input-foreground, #ccc);
+            border: 1px solid var(--vscode-input-border, #3c3c3c);
             border-radius: 8px;
             padding: 10px 12px;
             font-family: inherit;
@@ -542,21 +367,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             min-height: 40px;
             max-height: 120px;
             outline: none;
-            transition: border-color 0.15s ease;
         }
 
-        .input-field:focus {
-            border-color: var(--focus-border);
-            box-shadow: 0 0 0 1px var(--focus-border);
+        #userInput:focus {
+            border-color: var(--vscode-focusBorder, #007fd4);
         }
 
-        .input-field::placeholder {
-            color: var(--text-secondary);
-        }
-
-        .send-btn {
-            background: var(--accent-color);
-            color: var(--accent-text);
+        #sendBtn {
+            background: var(--vscode-button-background, #0e639c);
+            color: var(--vscode-button-foreground, #fff);
             border: none;
             border-radius: 8px;
             width: 36px;
@@ -565,442 +384,320 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.15s ease;
             flex-shrink: 0;
         }
 
-        .send-btn:hover:not(:disabled) {
-            background: var(--accent-hover);
-            transform: scale(1.05);
+        #sendBtn:hover:not(:disabled) {
+            background: var(--vscode-button-hoverBackground, #1177bb);
         }
 
-        .send-btn:disabled {
+        #sendBtn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
-        .send-btn svg {
+        #sendBtn svg {
             width: 16px;
             height: 16px;
         }
 
-        .input-hint {
+        .hint {
             font-size: 10px;
-            color: var(--text-secondary);
+            color: var(--vscode-descriptionForeground, #999);
             margin-top: 6px;
             text-align: center;
         }
 
-        .input-hint kbd {
-            background: var(--bg-secondary);
+        .hint kbd {
+            background: var(--vscode-editor-background, #252526);
             padding: 1px 4px;
             border-radius: 3px;
+            border: 1px solid var(--vscode-panel-border, #3c3c3c);
             font-size: 10px;
-            border: 1px solid var(--border-color);
         }
 
-        /* Markdown 格式 */
-        .message-content h1, .message-content h2, .message-content h3 {
-            margin: 12px 0 6px 0;
-            font-weight: 600;
-        }
-
-        .message-content h1 { font-size: 16px; }
-        .message-content h2 { font-size: 14px; }
-        .message-content h3 { font-size: 13px; }
-
-        .message-content ul, .message-content ol {
-            margin: 6px 0;
-            padding-left: 20px;
-        }
-
-        .message-content li {
-            margin: 4px 0;
-        }
-
-        .message-content blockquote {
-            border-left: 3px solid var(--accent-color);
-            padding-left: 12px;
-            margin: 8px 0;
-            color: var(--text-secondary);
-        }
-
-        .message-content a {
-            color: var(--accent-color);
-            text-decoration: none;
-        }
-
-        .message-content a:hover {
-            text-decoration: underline;
-        }
-
-        .message-content strong {
-            font-weight: 600;
-        }
-
-        .message-content em {
-            font-style: italic;
-        }
-
-        .message-content hr {
-            border: none;
-            border-top: 1px solid var(--border-color);
-            margin: 12px 0;
-        }
-
-        /* 表格样式 */
-        .message-content table {
-            border-collapse: collapse;
-            width: 100%;
-            margin: 8px 0;
-            font-size: 12px;
-        }
-
-        .message-content th, .message-content td {
-            border: 1px solid var(--border-color);
-            padding: 6px 10px;
-            text-align: left;
-        }
-
-        .message-content th {
-            background: var(--bg-secondary);
-            font-weight: 600;
-        }
-
-        .message-content tr:nth-child(even) {
-            background: rgba(255,255,255,0.02);
-        }
+        /* Markdown */
+        .msg-body h1, .msg-body h2, .msg-body h3 { margin: 10px 0 6px; font-weight: 600; }
+        .msg-body h1 { font-size: 16px; }
+        .msg-body h2 { font-size: 14px; }
+        .msg-body h3 { font-size: 13px; }
+        .msg-body ul, .msg-body ol { margin: 6px 0; padding-left: 20px; }
+        .msg-body li { margin: 4px 0; }
+        .msg-body blockquote { border-left: 3px solid var(--vscode-button-background, #0e639c); padding-left: 12px; margin: 8px 0; color: var(--vscode-descriptionForeground, #999); }
+        .msg-body a { color: var(--vscode-textLink-foreground, #3794ff); }
+        .msg-body hr { border: none; border-top: 1px solid var(--vscode-panel-border, #3c3c3c); margin: 12px 0; }
+        .msg-body table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 12px; }
+        .msg-body th, .msg-body td { border: 1px solid var(--vscode-panel-border, #3c3c3c); padding: 6px 10px; text-align: left; }
+        .msg-body th { background: var(--vscode-editor-background, #252526); }
     </style>
 </head>
 <body>
-    <!-- 顶部工具栏 -->
     <div class="toolbar">
-        <div class="toolbar-left">
-            <span class="toolbar-title">Dify AI</span>
-            <span class="toolbar-badge">Beta</span>
-        </div>
-        <div class="toolbar-actions">
-            <button class="toolbar-btn" id="clearBtn" title="清空对话">🗑️</button>
-            <button class="toolbar-btn" id="settingsBtn" title="设置">⚙️</button>
-        </div>
+        <span class="toolbar-title">Dify AI 助手</span>
+        <button class="toolbar-btn" id="clearBtn" title="清空对话">🗑️</button>
     </div>
 
-    <!-- 消息容器 -->
-    <div class="messages-container" id="messagesContainer">
+    <div class="messages" id="messages">
         <div class="welcome" id="welcome">
             <div class="welcome-icon">🤖</div>
-            <div class="welcome-title">Dify AI 编程助手</div>
-            <div class="welcome-desc">我可以帮你写代码、解释代码、调试和重构</div>
-            <div class="welcome-features">
-                <div class="feature-item" data-action="explain">
-                    <span class="feature-icon">📖</span>
+            <div class="welcome-title">你好，我是 AI 编程助手</div>
+            <div class="welcome-desc">可以帮你写代码、解释代码、调试和重构</div>
+            <div class="quick-actions">
+                <button class="quick-btn" data-prompt="请解释这段代码">
+                    <span class="quick-btn-icon">📖</span>
                     <span>解释代码</span>
-                </div>
-                <div class="feature-item" data-action="fix">
-                    <span class="feature-icon">🐛</span>
+                </button>
+                <button class="quick-btn" data-prompt="请帮我修复这段代码的问题">
+                    <span class="quick-btn-icon">🐛</span>
                     <span>修复 Bug</span>
-                </div>
-                <div class="feature-item" data-action="refactor">
-                    <span class="feature-icon">♻️</span>
-                    <span>重构优化</span>
-                </div>
-                <div class="feature-item" data-action="complete">
-                    <span class="feature-icon">✨</span>
+                </button>
+                <button class="quick-btn" data-prompt="请帮我重构这段代码">
+                    <span class="quick-btn-icon">♻️</span>
+                    <span>重构代码</span>
+                </button>
+                <button class="quick-btn" data-prompt="请帮我生成代码">
+                    <span class="quick-btn-icon">✨</span>
                     <span>生成代码</span>
-                </div>
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- 思考状态 -->
     <div class="thinking" id="thinking">
-        <div class="thinking-dots">
-            <div class="thinking-dot"></div>
-            <div class="thinking-dot"></div>
-            <div class="thinking-dot"></div>
-        </div>
-        <span class="thinking-text">AI 正在思考...</span>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <div class="dot"></div>
+        <span class="thinking-text">AI 思考中...</span>
     </div>
 
-    <!-- 输入区域 -->
-    <div class="input-container">
-        <div class="input-wrapper">
-            <textarea class="input-field" id="inputField" placeholder="输入你的问题..." rows="1"></textarea>
-            <button class="send-btn" id="sendBtn" title="发送消息 (Enter)">
+    <div class="input-area">
+        <div class="input-row">
+            <textarea id="userInput" placeholder="输入消息..." rows="1"></textarea>
+            <button id="sendBtn" title="发送 (Enter)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
                 </svg>
             </button>
         </div>
-        <div class="input-hint">
+        <div class="hint">
             <kbd>Enter</kbd> 发送 · <kbd>Shift+Enter</kbd> 换行
         </div>
     </div>
 
     <script>
-        (function() {
-            const vscode = acquireVsCodeApi();
-            const messagesContainer = document.getElementById('messagesContainer');
-            const welcome = document.getElementById('welcome');
-            const thinking = document.getElementById('thinking');
-            const inputField = document.getElementById('inputField');
-            const sendBtn = document.getElementById('sendBtn');
-            const clearBtn = document.getElementById('clearBtn');
-            const settingsBtn = document.getElementById('settingsBtn');
+        const vscode = acquireVsCodeApi();
 
-            // 聚焦输入框
-            function focusInput() {
-                if (inputField) {
-                    inputField.focus();
-                }
-            }
+        // DOM 元素
+        const messagesEl = document.getElementById('messages');
+        const welcomeEl = document.getElementById('welcome');
+        const thinkingEl = document.getElementById('thinking');
+        const inputEl = document.getElementById('userInput');
+        const sendBtnEl = document.getElementById('sendBtn');
+        const clearBtnEl = document.getElementById('clearBtn');
 
-            // 发送消息
-            function sendMessage() {
-                const text = inputField.value.trim();
-                if (!text) return;
+        // 聚焦输入框
+        function focusInput() {
+            inputEl.focus();
+        }
 
-                welcome.style.display = 'none';
-                addMessage(text, 'user');
-                vscode.postMessage({ command: 'sendMessage', text: text });
-                inputField.value = '';
-                inputField.style.height = 'auto';
-                focusInput();
-            }
+        // 发送消息
+        function doSend() {
+            const text = inputEl.value.trim();
+            if (!text) return;
 
-            // 清空对话
-            function clearChat() {
-                messagesContainer.innerHTML = '';
-                messagesContainer.appendChild(welcome);
-                welcome.style.display = 'flex';
-                vscode.postMessage({ command: 'clearChat' });
-            }
+            welcomeEl.style.display = 'none';
+            appendMessage(text, 'user');
+            vscode.postMessage({ command: 'sendMessage', text: text });
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            focusInput();
+        }
 
-            // 添加消息
-            function addMessage(text, role) {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message ' + role;
+        // 清空对话
+        function doClear() {
+            messagesEl.innerHTML = '';
+            messagesEl.appendChild(welcomeEl);
+            welcomeEl.style.display = '';
+            vscode.postMessage({ command: 'clearChat' });
+        }
 
-                const now = new Date();
-                const timeStr = now.getHours().toString().padStart(2, '0') + ':' + 
-                               now.getMinutes().toString().padStart(2, '0');
+        // 添加消息
+        function appendMessage(text, role) {
+            const div = document.createElement('div');
+            div.className = 'msg ' + role;
 
-                const roleNames = {
-                    'user': '你',
-                    'assistant': 'AI',
-                    'error': '错误',
-                    'system': '系统'
-                };
+            const names = { user: '你', bot: 'AI', error: '错误', system: '系统' };
+            const icons = { user: '👤', bot: '🤖', error: '❌', system: 'ℹ️' };
 
-                const roleIcons = {
-                    'user': '👤',
-                    'assistant': '🤖',
-                    'error': '❌',
-                    'system': 'ℹ️'
-                };
+            const header = document.createElement('div');
+            header.className = 'msg-header';
+            header.innerHTML = '<div class="msg-avatar">' + (icons[role] || '💬') + '</div><span class="msg-name">' + (names[role] || role) + '</span>';
 
-                messageDiv.innerHTML = 
-                    '<div class="message-header">' +
-                        '<div class="message-avatar">' + (roleIcons[role] || '💬') + '</div>' +
-                        '<span class="message-role">' + (roleNames[role] || role) + '</span>' +
-                        '<span class="message-time">' + timeStr + '</span>' +
-                    '</div>' +
-                    '<div class="message-content">' + formatMarkdown(text) + '</div>';
+            const body = document.createElement('div');
+            body.className = 'msg-body';
+            body.innerHTML = renderMarkdown(text);
 
-                messagesContainer.appendChild(messageDiv);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            div.appendChild(header);
+            div.appendChild(body);
+            messagesEl.appendChild(div);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
 
-                // 为代码块添加操作按钮
-                messageDiv.querySelectorAll('pre').forEach(function(pre) {
-                    const code = pre.querySelector('code');
-                    if (!code) return;
+            // 给代码块添加复制按钮
+            div.querySelectorAll('pre').forEach(function(pre) {
+                const code = pre.querySelector('code');
+                if (!code) return;
 
-                    const lang = (code.className.match(/language-(\\w+)/) || ['', ''])[1];
-                    
-                    const header = document.createElement('div');
-                    header.className = 'code-header';
-                    header.innerHTML = 
-                        '<span class="code-lang">' + (lang || 'code') + '</span>' +
-                        '<div class="code-actions">' +
-                            '<button class="code-btn copy-btn">复制</button>' +
-                            '<button class="code-btn insert-btn">插入</button>' +
-                        '</div>';
+                const langMatch = code.className.match(/language-(\w+)/);
+                const lang = langMatch ? langMatch[1] : 'code';
 
-                    pre.insertBefore(header, pre.firstChild);
+                const bar = document.createElement('div');
+                bar.className = 'code-bar';
 
-                    // 复制按钮事件
-                    header.querySelector('.copy-btn').addEventListener('click', function() {
-                        vscode.postMessage({ 
-                            command: 'copyCode', 
-                            code: code.textContent 
-                        });
-                    });
+                const langSpan = document.createElement('span');
+                langSpan.className = 'code-lang';
+                langSpan.textContent = lang;
 
-                    // 插入按钮事件
-                    header.querySelector('.insert-btn').addEventListener('click', function() {
-                        vscode.postMessage({ 
-                            command: 'insertCode', 
-                            code: code.textContent 
-                        });
-                    });
-                });
-            }
-
-            // 格式化 Markdown
-            function formatMarkdown(text) {
-                let html = text;
-
-                // 代码块
-                html = html.replace(/\`\`\`(\w*)\n([\s\S]*?)\`\`\`/g, function(match, lang, code) {
-                    return '<pre><code class="language-' + lang + '">' + escapeHtml(code.trim()) + '</code></pre>';
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'code-copy';
+                copyBtn.textContent = '复制';
+                copyBtn.addEventListener('click', function() {
+                    vscode.postMessage({ command: 'copyCode', code: code.textContent });
+                    copyBtn.textContent = '已复制!';
+                    setTimeout(function() { copyBtn.textContent = '复制'; }, 2000);
                 });
 
-                // 行内代码
-                html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
+                bar.appendChild(langSpan);
+                bar.appendChild(copyBtn);
+                pre.insertBefore(bar, pre.firstChild);
+            });
+        }
 
-                // 标题
-                html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-                html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-                html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        // 渲染 Markdown
+        function renderMarkdown(text) {
+            let html = text;
 
-                // 粗体和斜体
-                html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-                html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            // 代码块
+            html = html.replace(/\`\`\`(\w*)\n([\s\S]*?)\`\`\`/g, function(match, lang, code) {
+                return '<pre><code class="language-' + (lang || 'text') + '">' + escapeHtml(code.trim()) + '</code></pre>';
+            });
 
-                // 链接
-                html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+            // 行内代码
+            html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
 
-                // 列表
-                html = html.replace(/^\- (.+)$/gm, '<li>$1</li>');
-                html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-                html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+            // 标题
+            html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+            html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+            html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
 
-                // 引用
-                html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+            // 粗体斜体
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
 
-                // 分割线
-                html = html.replace(/^---$/gm, '<hr>');
+            // 链接
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
 
-                // 段落（换行）
-                html = html.replace(/\n\n/g, '</p><p>');
-                html = html.replace(/\n/g, '<br>');
-                html = '<p>' + html + '</p>';
+            // 列表
+            html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+            html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
 
-                // 清理空段落
-                html = html.replace(/<p><\/p>/g, '');
-                html = html.replace(/<p>(<h[123]>)/g, '$1');
-                html = html.replace(/(<\/h[123]>)<\/p>/g, '$1');
-                html = html.replace(/<p>(<pre>)/g, '$1');
-                html = html.replace(/(<\/pre>)<\/p>/g, '$1');
-                html = html.replace(/<p>(<ul>)/g, '$1');
-                html = html.replace(/(<\/ul>)<\/p>/g, '$1');
-                html = html.replace(/<p>(<blockquote>)/g, '$1');
-                html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
-                html = html.replace(/<p>(<hr>)/g, '$1');
-                html = html.replace(/(<hr>)<\/p>/g, '$1');
+            // 引用
+            html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
 
-                return html;
+            // 分割线
+            html = html.replace(/^---$/gm, '<hr>');
+
+            // 换行
+            html = html.replace(/\n\n/g, '</p><p>');
+            html = html.replace(/\n/g, '<br>');
+
+            return '<p>' + html + '</p>';
+        }
+
+        function escapeHtml(text) {
+            return text
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // ============ 事件绑定 ============
+
+        // 发送按钮
+        sendBtnEl.addEventListener('click', function(e) {
+            e.preventDefault();
+            doSend();
+        });
+
+        // Enter 键
+        inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                doSend();
             }
+        });
 
-            // HTML 转义
-            function escapeHtml(text) {
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
+        // 自动调整高度
+        inputEl.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
 
-            // 事件监听 - 使用 addEventListener 而非内联事件
+        // 清空按钮
+        clearBtnEl.addEventListener('click', function(e) {
+            e.preventDefault();
+            doClear();
+        });
 
-            // Enter 键发送
-            inputField.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    sendMessage();
-                }
-            });
-
-            // 自动调整高度
-            inputField.addEventListener('input', function() {
-                this.style.height = 'auto';
-                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-            });
-
-            // 发送按钮
-            sendBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                sendMessage();
-            });
-
-            // 清空按钮
-            clearBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                clearChat();
-            });
-
-            // 设置按钮
-            settingsBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                vscode.postMessage({ command: 'openSettings' });
-            });
-
-            // 功能项点击
-            document.querySelectorAll('.feature-item').forEach(function(item) {
-                item.addEventListener('click', function() {
-                    const action = this.getAttribute('data-action');
-                    const prompts = {
-                        'explain': '请解释这段代码的作用和逻辑',
-                        'fix': '请帮我找出并修复这段代码中的问题',
-                        'refactor': '请帮我重构这段代码，提高可读性和性能',
-                        'complete': '请帮我生成代码'
-                    };
-                    if (prompts[action]) {
-                        inputField.value = prompts[action];
-                        focusInput();
-                    }
-                });
-            });
-
-            // 点击消息区域聚焦输入框
-            messagesContainer.addEventListener('click', function(e) {
-                if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+        // 快捷按钮
+        var quickBtns = document.querySelectorAll('.quick-btn');
+        for (var i = 0; i < quickBtns.length; i++) {
+            quickBtns[i].addEventListener('click', function() {
+                var prompt = this.getAttribute('data-prompt');
+                if (prompt) {
+                    inputEl.value = prompt;
                     focusInput();
                 }
             });
+        }
 
-            // 监听来自扩展的消息
-            window.addEventListener('message', function(event) {
-                const message = event.data;
-                switch (message.command) {
-                    case 'receiveMessage':
-                        addMessage(message.text, message.role);
-                        break;
-                    case 'startThinking':
-                        thinking.classList.add('active');
-                        sendBtn.disabled = true;
-                        break;
-                    case 'stopThinking':
-                        thinking.classList.remove('active');
-                        sendBtn.disabled = false;
-                        focusInput();
-                        break;
-                    case 'clearChat':
-                        messagesContainer.innerHTML = '';
-                        messagesContainer.appendChild(welcome);
-                        welcome.style.display = 'flex';
-                        break;
-                    case 'focusInput':
-                        focusInput();
-                        break;
-                }
-            });
+        // 点击消息区聚焦
+        messagesEl.addEventListener('click', function(e) {
+            if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                focusInput();
+            }
+        });
 
-            // 通知扩展已准备好
-            vscode.postMessage({ command: 'ready' });
+        // 监听扩展消息
+        window.addEventListener('message', function(event) {
+            var msg = event.data;
+            switch (msg.command) {
+                case 'receiveMessage':
+                    appendMessage(msg.text, msg.role);
+                    break;
+                case 'startThinking':
+                    thinkingEl.classList.add('show');
+                    sendBtnEl.disabled = true;
+                    break;
+                case 'stopThinking':
+                    thinkingEl.classList.remove('show');
+                    sendBtnEl.disabled = false;
+                    focusInput();
+                    break;
+                case 'clearChat':
+                    messagesEl.innerHTML = '';
+                    messagesEl.appendChild(welcomeEl);
+                    welcomeEl.style.display = '';
+                    break;
+                case 'focusInput':
+                    focusInput();
+                    break;
+            }
+        });
 
-            // 初始聚焦
-            focusInput();
-        })();
+        // 初始聚焦
+        focusInput();
     </script>
 </body>
 </html>`;
