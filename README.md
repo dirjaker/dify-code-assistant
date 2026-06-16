@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/banner.svg" width="100%" alt="Dify Code Assistant">
+<img src="assets/banner.png" width="100%" alt="Dify Code Assistant">
 
 <br>
 
