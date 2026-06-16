@@ -86,6 +86,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
                 this._postMessage({ command: 'focusInput' });
+                this._sendContextPills();
             }
         });
     }
@@ -160,6 +161,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         } finally {
             this._postMessage({ command: 'stopThinking' });
         }
+    }
+
+    /**
+     * 发送上下文标签到 Webview
+     */
+    private _sendContextPills(): void {
+        const contexts: { type: string; label: string; icon: string }[] = [];
+
+        const editor = this._fs.getActiveEditor();
+        if (editor) {
+            contexts.push({
+                type: 'file',
+                label: editor.relativePath,
+                icon: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 2h5l4 4v8a1 1 0 01-1 1H4a1 1 0 01-1-1V3a1 1 0 011-1z"/><path d="M9 2v4h4"/></svg>'
+            });
+
+            const selectedText = this._fs.getSelectedText();
+            if (selectedText) {
+                const lineCount = selectedText.split('\n').length;
+                contexts.push({
+                    type: 'selection',
+                    label: `${lineCount} line${lineCount > 1 ? 's' : ''} selected`,
+                    icon: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>'
+                });
+            }
+        }
+
+        this._postMessage({ command: 'updateContext', contexts });
     }
 
     /**

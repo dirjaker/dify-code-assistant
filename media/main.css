@@ -3,7 +3,9 @@
     --bg-secondary: var(--vscode-editor-background, #252526);
     --bg-tertiary: var(--vscode-input-background, #3c3c3c);
     --bg-hover: var(--vscode-list-hoverBackground, #2a2d2e);
+    --bg-active: var(--vscode-list-activeSelectionBackground, #094771);
     --border: var(--vscode-panel-border, #3c3c3c);
+    --border-focus: var(--vscode-focusBorder, #007fd4);
     --text-primary: var(--vscode-foreground, #cccccc);
     --text-secondary: var(--vscode-descriptionForeground, #999999);
     --text-muted: var(--vscode-disabledForeground, #666666);
@@ -13,10 +15,13 @@
     --error: var(--vscode-errorForeground, #f44747);
     --success: #4ec9b0;
     --warning: #d7ba7d;
+    --info: #3794ff;
     --font: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
     --font-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Fira Code', monospace);
     --radius: 6px;
     --radius-lg: 10px;
+    --shadow: 0 2px 8px rgba(0,0,0,0.15);
+    --transition: 0.15s ease;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -34,7 +39,7 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   Header — Mode Switcher
+   Header
    ═══════════════════════════════════════ */
 
 .header {
@@ -49,7 +54,7 @@ body {
 
 .mode-switcher {
     display: flex;
-    gap: 2px;
+    gap: 1px;
     background: var(--bg-primary);
     border-radius: var(--radius);
     padding: 2px;
@@ -58,16 +63,16 @@ body {
 .mode-btn {
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
-    padding: 4px 12px;
+    padding: 4px 10px;
     border-radius: 4px;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    transition: all 0.15s ease;
+    letter-spacing: 0.3px;
+    transition: all var(--transition);
     font-family: var(--font);
+    position: relative;
 }
 
 .mode-btn:hover {
@@ -80,6 +85,13 @@ body {
     background: var(--accent);
 }
 
+.mode-btn .mode-key {
+    font-size: 9px;
+    opacity: 0.5;
+    margin-left: 4px;
+    font-weight: 400;
+}
+
 .header-actions {
     display: flex;
     gap: 2px;
@@ -88,14 +100,14 @@ body {
 .icon-btn {
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: var(--text-muted);
     cursor: pointer;
     padding: 4px 6px;
     border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: all var(--transition);
 }
 
 .icon-btn:hover {
@@ -125,22 +137,22 @@ body {
 /* Welcome */
 .welcome {
     text-align: center;
-    padding: 60px 20px 40px;
+    padding: 48px 20px 32px;
 }
 
 .welcome-title {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     letter-spacing: -0.3px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     color: var(--text-primary);
 }
 
 .welcome-desc {
     font-size: 12px;
     color: var(--text-secondary);
-    margin-bottom: 28px;
-    line-height: 1.6;
+    margin-bottom: 24px;
+    line-height: 1.5;
 }
 
 .quick-actions {
@@ -161,7 +173,7 @@ body {
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    transition: all 0.15s ease;
+    transition: all var(--transition);
     font-family: var(--font);
 }
 
@@ -171,72 +183,137 @@ body {
     background: var(--bg-hover);
 }
 
-/* Message */
-.msg {
-    margin-bottom: 12px;
-    animation: fadeIn 0.2s ease;
+/* ═══════════════════════════════════════
+   Step Container — 每步独立展示
+   ═══════════════════════════════════════ */
+
+.step {
+    margin-bottom: 16px;
+    animation: stepIn 0.2s ease;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(4px); }
+@keyframes stepIn {
+    from { opacity: 0; transform: translateY(6px); }
     to { opacity: 1; transform: translateY(0); }
 }
 
-.msg-header {
+.step-header {
     display: flex;
     align-items: center;
-    gap: 6px;
+    justify-content: space-between;
     margin-bottom: 4px;
+    padding: 0 2px;
 }
 
-.msg-role {
+.step-role {
     font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.5px;
-    padding: 1px 6px;
+    padding: 2px 6px;
     border-radius: 3px;
 }
 
-.msg.user .msg-role {
+.step.user .step-role {
     color: var(--accent);
-    background: rgba(14, 99, 156, 0.15);
+    background: rgba(14, 99, 156, 0.12);
 }
 
-.msg.assistant .msg-role {
+.step.assistant .step-role {
     color: var(--success);
     background: rgba(78, 201, 176, 0.1);
 }
 
-.msg.error .msg-role {
+.step.error .step-role {
     color: var(--error);
     background: rgba(244, 71, 71, 0.1);
 }
 
-.msg-body {
+.step-actions {
+    display: flex;
+    gap: 2px;
+    opacity: 0;
+    transition: opacity var(--transition);
+}
+
+.step:hover .step-actions {
+    opacity: 1;
+}
+
+.step-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 5px;
+    border-radius: 3px;
+    font-size: 10px;
+    transition: all var(--transition);
+    font-family: var(--font);
+}
+
+.step-action-btn:hover {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+}
+
+.step-body {
     padding: 10px 12px;
     border-radius: var(--radius);
     line-height: 1.65;
     font-size: 13px;
 }
 
-.msg.user .msg-body {
+.step.user .step-body {
     background: var(--bg-secondary);
     border: 1px solid var(--border);
 }
 
-.msg.assistant .msg-body {
+.step.assistant .step-body {
     background: transparent;
 }
 
-.msg.error .msg-body {
+.step.error .step-body {
     background: rgba(244, 71, 71, 0.06);
     border: 1px solid rgba(244, 71, 71, 0.2);
     color: var(--error);
 }
 
-/* Code blocks */
-.msg-body pre {
+/* ═══════════════════════════════════════
+   Context Pills — 上下文标签
+   ═══════════════════════════════════════ */
+
+.context-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.context-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+}
+
+.context-pill .pill-icon {
+    width: 12px;
+    height: 12px;
+    opacity: 0.6;
+}
+
+/* ═══════════════════════════════════════
+   Code Blocks
+   ═══════════════════════════════════════ */
+
+.step-body pre {
     background: var(--bg-primary);
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -274,7 +351,7 @@ body {
     font-size: 10px;
     padding: 2px 6px;
     border-radius: 3px;
-    transition: all 0.15s ease;
+    transition: all var(--transition);
     font-family: var(--font);
 }
 
@@ -283,7 +360,7 @@ body {
     background: rgba(255,255,255,0.08);
 }
 
-.msg-body pre code {
+.step-body pre code {
     display: block;
     padding: 10px 12px;
     overflow-x: auto;
@@ -292,69 +369,69 @@ body {
     line-height: 1.5;
 }
 
-.msg-body code {
+.step-body code {
     font-family: var(--font-mono);
     font-size: 12px;
 }
 
-.msg-body p code {
+.step-body p code {
     background: var(--bg-tertiary);
     padding: 1px 5px;
     border-radius: 3px;
 }
 
 /* Markdown */
-.msg-body h1, .msg-body h2, .msg-body h3 {
+.step-body h1, .step-body h2, .step-body h3 {
     margin: 12px 0 6px;
     font-weight: 600;
 }
-.msg-body h1 { font-size: 15px; }
-.msg-body h2 { font-size: 14px; }
-.msg-body h3 { font-size: 13px; }
+.step-body h1 { font-size: 15px; }
+.step-body h2 { font-size: 14px; }
+.step-body h3 { font-size: 13px; }
 
-.msg-body ul, .msg-body ol {
+.step-body ul, .step-body ol {
     margin: 6px 0;
     padding-left: 18px;
 }
-.msg-body li { margin: 3px 0; }
+.step-body li { margin: 3px 0; }
 
-.msg-body blockquote {
+.step-body blockquote {
     border-left: 2px solid var(--accent);
     padding-left: 10px;
     margin: 8px 0;
     color: var(--text-secondary);
 }
 
-.msg-body a {
+.step-body a {
     color: var(--vscode-textLink-foreground, #3794ff);
     text-decoration: none;
 }
-.msg-body a:hover { text-decoration: underline; }
+.step-body a:hover { text-decoration: underline; }
 
-.msg-body hr {
+.step-body hr {
     border: none;
     border-top: 1px solid var(--border);
     margin: 10px 0;
 }
 
-.msg-body table {
+.step-body table {
     border-collapse: collapse;
     width: 100%;
     margin: 8px 0;
     font-size: 12px;
 }
-.msg-body th, .msg-body td {
+.step-body th, .step-body td {
     border: 1px solid var(--border);
     padding: 5px 8px;
     text-align: left;
 }
-.msg-body th {
+.step-body th {
     background: var(--bg-secondary);
     font-weight: 600;
 }
 
-.msg-body strong { font-weight: 600; }
-.msg-body em { font-style: italic; }
+.step-body strong { font-weight: 600; }
+.step-body em { font-style: italic; }
 
 /* ═══════════════════════════════════════
    Diff View
@@ -367,9 +444,7 @@ body {
     overflow: hidden;
 }
 
-.diff-file {
-    background: var(--bg-primary);
-}
+.diff-file { background: var(--bg-primary); }
 
 .diff-header {
     display: flex;
@@ -408,26 +483,16 @@ body {
     border-radius: 2px;
 }
 
-.diff-line-add,
-.diff-line-del,
-.diff-line-ctx {
+.diff-line-add, .diff-line-del, .diff-line-ctx {
     display: flex;
     font-family: var(--font-mono);
     font-size: 11px;
     line-height: 1.6;
 }
 
-.diff-line-add {
-    background: rgba(78, 201, 176, 0.08);
-}
-
-.diff-line-del {
-    background: rgba(244, 71, 71, 0.08);
-}
-
-.diff-line-ctx {
-    background: transparent;
-}
+.diff-line-add { background: rgba(78, 201, 176, 0.08); }
+.diff-line-del { background: rgba(244, 71, 71, 0.08); }
+.diff-line-ctx { background: transparent; }
 
 .diff-prefix {
     width: 20px;
@@ -462,7 +527,7 @@ body {
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    transition: all 0.15s ease;
+    transition: all var(--transition);
     font-family: var(--font);
 }
 
@@ -472,9 +537,7 @@ body {
     border-color: var(--accent);
 }
 
-.diff-btn.accept:hover {
-    background: var(--accent-hover);
-}
+.diff-btn.accept:hover { background: var(--accent-hover); }
 
 .diff-btn.reject {
     background: transparent;
@@ -497,19 +560,17 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   Thinking
+   Thinking Indicator
    ═══════════════════════════════════════ */
 
 .thinking {
     display: none;
-    padding: 6px 12px;
+    padding: 8px 12px;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
 }
 
-.thinking.show {
-    display: flex;
-}
+.thinking.show { display: flex; }
 
 .thinking .dot {
     width: 4px;
@@ -533,13 +594,48 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   Input
+   Input Area — Continue 风格
    ═══════════════════════════════════════ */
 
 .input-area {
     padding: 10px 12px;
     border-top: 1px solid var(--border);
     flex-shrink: 0;
+}
+
+/* 上下文标签栏 */
+.input-context {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-bottom: 6px;
+    min-height: 0;
+}
+
+.input-context:empty {
+    display: none;
+}
+
+.context-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 2px 6px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.context-tag .tag-icon {
+    flex-shrink: 0;
+    opacity: 0.5;
 }
 
 .input-row {
@@ -562,12 +658,10 @@ body {
     min-height: 36px;
     max-height: 120px;
     outline: none;
-    transition: border-color 0.15s ease;
+    transition: border-color var(--transition);
 }
 
-#userInput:focus {
-    border-color: var(--accent);
-}
+#userInput:focus { border-color: var(--border-focus); }
 
 #sendBtn {
     background: var(--accent);
@@ -581,37 +675,41 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background 0.15s ease;
+    transition: background var(--transition);
 }
 
-#sendBtn:hover:not(:disabled) {
-    background: var(--accent-hover);
+#sendBtn:hover:not(:disabled) { background: var(--accent-hover); }
+#sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
+#sendBtn svg { width: 14px; height: 14px; }
+
+/* 输入框底部工具栏 */
+.input-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 5px;
 }
 
-#sendBtn:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-#sendBtn svg {
-    width: 14px;
-    height: 14px;
-}
-
-.hint {
+.input-hint {
     font-size: 10px;
     color: var(--text-muted);
-    margin-top: 5px;
-    text-align: center;
 }
 
-.hint kbd {
+.input-hint kbd {
     background: var(--bg-secondary);
     padding: 1px 4px;
     border-radius: 3px;
     border: 1px solid var(--border);
     font-size: 9px;
     font-family: var(--font-mono);
+}
+
+.input-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 
 /* ═══════════════════════════════════════
@@ -647,4 +745,64 @@ body {
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+/* ═══════════════════════════════════════
+   Inline Editor Edit — 编辑器内浮层
+   ═══════════════════════════════════════ */
+
+.inline-edit-widget {
+    position: fixed;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 8px;
+    z-index: 10000;
+    min-width: 280px;
+    max-width: 400px;
+}
+
+.inline-edit-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+.inline-edit-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.inline-edit-btn {
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all var(--transition);
+    font-family: var(--font);
+}
+
+.inline-edit-btn.accept {
+    background: var(--accent);
+    color: var(--accent-text);
+    border-color: var(--accent);
+}
+
+.inline-edit-btn.accept:hover { background: var(--accent-hover); }
+
+.inline-edit-btn.reject {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.inline-edit-btn.reject:hover {
+    color: var(--text-primary);
+    border-color: var(--text-secondary);
 }
