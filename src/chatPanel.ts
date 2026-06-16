@@ -278,13 +278,15 @@ Be concise and direct. Focus on the code.`;
             font-family: var(--vscode-font-family);
             font-size: var(--vscode-font-size);
             resize: none;
-            min-height: 40px;
+            min-height: 44px;
             max-height: 120px;
             outline: none;
+            line-height: 1.4;
         }
 
         textarea:focus {
             border-color: var(--vscode-focusBorder);
+            box-shadow: 0 0 0 1px var(--vscode-focusBorder);
         }
 
         .send-btn {
@@ -352,20 +354,20 @@ Be concise and direct. Focus on the code.`;
     <div class="chat-container" id="chatContainer">
         <div class="welcome" id="welcome">
             <h2>Dify Code Assistant</h2>
-            <p>Ask me anything about your code</p>
+            <p>我是你的 AI 编程助手，可以帮你写代码、解释代码、调试和重构</p>
             <div class="shortcuts">
-                <div><kbd>Ctrl+Shift+D</kbd> Open chat</div>
-                <div><kbd>Enter</kbd> Send message</div>
-                <div><kbd>Shift+Enter</kbd> New line</div>
+                <div><kbd>Ctrl+Shift+D</kbd> 打开聊天</div>
+                <div><kbd>Enter</kbd> 发送消息</div>
+                <div><kbd>Shift+Enter</kbd> 换行</div>
             </div>
         </div>
     </div>
 
-    <div class="thinking" id="thinking">Thinking...</div>
+    <div class="thinking" id="thinking">思考中...</div>
 
     <div class="input-container">
         <div class="input-wrapper">
-            <textarea id="input" placeholder="Ask about your code..." rows="1"></textarea>
+            <textarea id="input" placeholder="输入消息... (Enter 发送, Shift+Enter 换行)" rows="1" autofocus></textarea>
             <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
         </div>
     </div>
@@ -378,16 +380,38 @@ Be concise and direct. Focus on the code.`;
         const thinking = document.getElementById('thinking');
         const welcome = document.getElementById('welcome');
 
-        input.addEventListener('keydown', (e) => {
+        // 确保 textarea 获得焦点
+        function focusInput() {
+            if (input) {
+                input.focus();
+            }
+        }
+
+        // 页面加载后聚焦
+        focusInput();
+
+        // 监听键盘事件
+        input.addEventListener('keydown', function(e) {
+            // Enter 发送消息 (不带 Shift)
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
+                e.stopPropagation();
                 sendMessage();
+                return false;
             }
         });
 
-        input.addEventListener('input', () => {
-            input.style.height = 'auto';
-            input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+        // 自动调整高度
+        input.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+        });
+
+        // 点击容器时聚焦输入框
+        document.addEventListener('click', function(e) {
+            if (e.target.tagName !== 'BUTTON') {
+                focusInput();
+            }
         });
 
         function sendMessage() {
@@ -399,6 +423,7 @@ Be concise and direct. Focus on the code.`;
             vscode.postMessage({ command: 'sendMessage', text: text });
             input.value = '';
             input.style.height = 'auto';
+            focusInput();
         }
 
         function clearChat() {

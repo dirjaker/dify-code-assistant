@@ -1,6 +1,5 @@
 <div align="center">
 
-<img src="assets/banner.svg" width="100%" alt="Dify Code Assistant">
 
 <br>
 
@@ -88,7 +87,6 @@ dify-code-assistant/
 │   ├── completionProvider.ts # 代码补全
 │   └── config.ts             # 配置管理
 ├── assets/
-│   └── banner.svg            # 项目 Banner
 ├── resources/
 │   └── icon.png              # 插件图标
 ├── package.json              # 插件清单
