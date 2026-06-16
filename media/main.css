@@ -741,3 +741,46 @@ body {
     white-space: pre-wrap;
     word-break: break-all;
 }
+
+/* ═══════════════════════════════════════
+   Streaming Cursor — 流式打字光标
+   ═══════════════════════════════════════ */
+
+.step-content.streaming::after {
+    content: '';
+    display: inline-block;
+    width: 2px;
+    height: 14px;
+    background: var(--accent);
+    margin-left: 2px;
+    vertical-align: text-bottom;
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+}
+
+/* Streaming 状态下 thinking 隐藏 */
+.thinking.streaming {
+    display: none;
+}
+
+/* Cancel 按钮 */
+.cancel-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-desc);
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    transition: all 0.15s ease;
+    font-family: var(--font);
+}
+
+.cancel-btn:hover {
+    color: var(--error);
+    border-color: var(--error);
+}

@@ -394,18 +394,21 @@
         streamingStep.className = 'step assistant';
 
         streamingContent = document.createElement('div');
-        streamingContent.className = 'step-content';
+        streamingContent.className = 'step-content streaming';
 
         streamingStep.appendChild(streamingContent);
         stepsArea.insertBefore(streamingStep, thinkingEl);
         streamBuffer = '';
+
+        // 隐藏 thinking，显示 cancel 按钮
+        thinkingEl.classList.remove('show');
+        thinkingEl.classList.add('streaming');
     }
 
     function appendStreamChunk(chunk) {
         if (!streamingContent) return;
         streamBuffer += chunk;
 
-        // 优化：检测是否在代码块内，如果是则只更新代码块内容
         var rendered = renderStreamingMarkdown(streamBuffer);
         streamingContent.innerHTML = rendered;
 
@@ -417,7 +420,10 @@
 
     function endStream() {
         if (streamingStep) {
-            // 最终渲染一次完整 markdown
+            // 移除 streaming 光标
+            streamingContent.classList.remove('streaming');
+
+            // 最终渲染完整 markdown
             streamingContent.innerHTML = renderMarkdown(streamBuffer);
             addCodeActions(streamingContent);
 
@@ -436,7 +442,28 @@
         streamingContent = null;
         streamBuffer = '';
         userScrolledUp = false;
+        thinkingEl.classList.remove('streaming');
     }
+
+    function cancelStream() {
+        if (streamingStep) {
+            streamingContent.classList.remove('streaming');
+            streamingContent.innerHTML = renderMarkdown(streamBuffer + '\n\n*[Cancelled]*');
+        }
+        streamingStep = null;
+        streamingContent = null;
+        streamBuffer = '';
+        userScrolledUp = false;
+        thinkingEl.classList.remove('streaming');
+        sendBtnEl.disabled = false;
+    }
+
+    // Escape 取消流式
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && streamingStep) {
+            cancelStream();
+        }
+    });
 
     /**
      * 流式 Markdown 渲染 — 处理未闭合的代码块
