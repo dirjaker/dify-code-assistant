@@ -26,9 +26,13 @@
         welcomeEl.style.display = 'none';
         appendMessage(text, 'user');
         vscode.postMessage({ command: 'sendMessage', text: text });
-        inputEl.value = '';
-        inputEl.style.height = 'auto';
-        focusInput();
+
+        // 清空输入框（下一帧执行，确保 Webview 正确更新）
+        requestAnimationFrame(function() {
+            inputEl.value = '';
+            inputEl.style.height = 'auto';
+            focusInput();
+        });
     }
 
     // 清空对话
