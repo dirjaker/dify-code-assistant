@@ -609,11 +609,9 @@ body {
     flex-wrap: wrap;
     gap: 4px;
     margin-bottom: 6px;
-    min-height: 0;
-}
-
-.input-context:empty {
-    display: none;
+    min-height: 20px;
+    max-height: 40px;
+    overflow: hidden;
 }
 
 .context-tag {
