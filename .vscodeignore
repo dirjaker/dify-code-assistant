@@ -1,8 +1,27 @@
-**/.vscode/**
-**/node_modules/**
+# Source
+.vscode/**
+.vscodeignore
 src/**
-.gitignore
 tsconfig.json
-**/*.map
-**/*.ts
-!out/**
+node_modules/**
+
+# Git
+.gitignore
+.git/**
+
+# Build artifacts
+*.vsix
+out/**/*.map
+
+# Documentation (not needed in VSIX)
+docs/**
+dify/**
+CHANGELOG.md
+
+# Assets not used in extension
+assets/**
+
+# Temporary
+tmp/**
+temp/**
+*.log
