@@ -5,6 +5,8 @@ import { CompletionProvider } from './completionProvider';
 import { FileSystemProvider } from './fileSystem';
 import { ModeManager } from './modeManager';
 import { DecorationManager } from './decorationManager';
+import { InlineChatProvider } from './chatInlineProvider';
+import { WorkspaceIndexer } from './workspaceIndexer';
 import { getConfig, validateConfig } from './config';
 
 let client: DifyClient;
@@ -13,6 +15,8 @@ let chatViewProvider: ChatViewProvider;
 let fileSystem: FileSystemProvider;
 let modeManager: ModeManager;
 let decorationManager: DecorationManager;
+let inlineChatProvider: InlineChatProvider;
+let workspaceIndexer: WorkspaceIndexer;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
@@ -25,7 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
     decorationManager = new DecorationManager();
 
     // 注册侧边栏视图
-    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager, context);
+    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager, context, workspaceIndexer);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             ChatViewProvider.viewType,
@@ -36,6 +40,17 @@ export function activate(context: vscode.ExtensionContext) {
                 }
             }
         )
+    );
+
+    // Workspace indexer
+    workspaceIndexer = new WorkspaceIndexer();
+
+    // 注册 Inline Chat
+    inlineChatProvider = new InlineChatProvider(client);
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dify.inlineChat', () => {
+            checkConfigAndRun(() => inlineChatProvider.start());
+        })
     );
 
     // 注册代码补全
