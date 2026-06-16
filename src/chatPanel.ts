@@ -7,6 +7,7 @@ import { ModeManager, AgentMode } from './modeManager';
 import { ToolExecutor, ToolCall, ToolResult } from './toolExecutor';
 import { DecorationManager } from './decorationManager';
 import { diffToHtml, FileDiff } from './diffEngine';
+import { WorkspaceIndexer } from './workspaceIndexer';
 
 interface ChatSession {
     id: string;
@@ -26,6 +27,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _extensionContext: vscode.ExtensionContext;
     private _chatHistory: { role: string; text: string; ts: number }[] = [];
     private _slashCommands: Map<string, { description: string; handler: (args: string) => Promise<string> }> = new Map();
+    private _workspaceIndexer?: WorkspaceIndexer;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -33,7 +35,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         fs: FileSystemProvider,
         modeManager: ModeManager,
         decorationManager: DecorationManager,
-        extensionContext?: vscode.ExtensionContext
+        extensionContext?: vscode.ExtensionContext,
+        workspaceIndexer?: WorkspaceIndexer
     ) {
         this._client = client;
         this._fs = fs;
@@ -41,6 +44,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this._decorationManager = decorationManager;
         this._toolExecutor = new ToolExecutor(fs, modeManager, decorationManager);
         this._extensionContext = extensionContext!;
+        this._workspaceIndexer = workspaceIndexer;
         this._registerSlashCommands();
     }
 
