@@ -1,13 +1,16 @@
+/* ═══════════════════════════════════════
+   Continue-style CSS — Dify Code Assistant
+   ═══════════════════════════════════════ */
+
 :root {
-    --bg-primary: var(--vscode-sideBar-background, #1e1e1e);
-    --bg-secondary: var(--vscode-editor-background, #252526);
-    --bg-tertiary: var(--vscode-input-background, #3c3c3c);
+    --bg: var(--vscode-sideBar-background, #1e1e1e);
+    --bg-input: var(--vscode-input-background, #3c3c3c);
     --bg-hover: var(--vscode-list-hoverBackground, #2a2d2e);
     --bg-active: var(--vscode-list-activeSelectionBackground, #094771);
     --border: var(--vscode-panel-border, #3c3c3c);
     --border-focus: var(--vscode-focusBorder, #007fd4);
-    --text-primary: var(--vscode-foreground, #cccccc);
-    --text-secondary: var(--vscode-descriptionForeground, #999999);
+    --text: var(--vscode-foreground, #cccccc);
+    --text-desc: var(--vscode-descriptionForeground, #999999);
     --text-muted: var(--vscode-disabledForeground, #666666);
     --accent: var(--vscode-button-background, #0e639c);
     --accent-hover: var(--vscode-button-hoverBackground, #1177bb);
@@ -15,13 +18,9 @@
     --error: var(--vscode-errorForeground, #f44747);
     --success: #4ec9b0;
     --warning: #d7ba7d;
-    --info: #3794ff;
     --font: var(--vscode-font-family, system-ui, -apple-system, sans-serif);
     --font-mono: var(--vscode-editor-font-family, 'Cascadia Code', 'Fira Code', monospace);
     --radius: 6px;
-    --radius-lg: 10px;
-    --shadow: 0 2px 8px rgba(0,0,0,0.15);
-    --transition: 0.15s ease;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -29,67 +28,50 @@
 body {
     font-family: var(--font);
     font-size: var(--vscode-font-size, 13px);
-    color: var(--text-primary);
-    background: var(--bg-primary);
+    color: var(--text);
+    background: var(--bg);
     height: 100vh;
-    display: flex;
-    flex-direction: column;
     overflow: hidden;
-    line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════
-   Header
+   Grid Layout — Continue 风格
+   grid-template-rows: 1fr auto
+   消息区占满，输入区固定底部
+   ═══════════════════════════════════════ */
+
+.grid-layout {
+    display: grid;
+    grid-template-rows: 1fr auto;
+    height: 100vh;
+}
+
+/* ═══════════════════════════════════════
+   Header — 紧凑，和 Continue 一致
    ═══════════════════════════════════════ */
 
 .header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 6px 10px;
+    padding: 4px 8px;
     border-bottom: 1px solid var(--border);
-    background: var(--bg-secondary);
-    flex-shrink: 0;
+    background: var(--bg);
+    min-height: 32px;
 }
 
-.mode-switcher {
+.header-left {
     display: flex;
-    gap: 1px;
-    background: var(--bg-primary);
-    border-radius: var(--radius);
-    padding: 2px;
+    align-items: center;
+    gap: 8px;
 }
 
-.mode-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 4px;
+.header-title {
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.3px;
-    transition: all var(--transition);
-    font-family: var(--font);
-    position: relative;
-}
-
-.mode-btn:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
-
-.mode-btn.active {
-    color: var(--accent-text);
-    background: var(--accent);
-}
-
-.mode-btn .mode-key {
-    font-size: 9px;
-    opacity: 0.5;
-    margin-left: 4px;
-    font-weight: 400;
+    color: var(--text-desc);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 .header-actions {
@@ -102,219 +84,58 @@ body {
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    padding: 4px 6px;
-    border-radius: 4px;
+    padding: 3px;
+    border-radius: 3px;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all var(--transition);
+    transition: all 0.15s ease;
 }
 
 .icon-btn:hover {
-    color: var(--text-primary);
+    color: var(--text);
     background: var(--bg-hover);
 }
 
 /* ═══════════════════════════════════════
-   Messages
+   Steps Area — 消息滚动区
+   Continue: StepsDiv
    ═══════════════════════════════════════ */
 
-.messages {
-    flex: 1;
+.steps-area {
     overflow-y: auto;
-    padding: 12px;
+    position: relative;
 }
 
-.messages::-webkit-scrollbar { width: 5px; }
-.messages::-webkit-scrollbar-thumb {
+.steps-area::-webkit-scrollbar { width: 5px; }
+.steps-area::-webkit-scrollbar-thumb {
     background: var(--vscode-scrollbarSlider-background, #424242);
     border-radius: 3px;
 }
-.messages::-webkit-scrollbar-thumb:hover {
-    background: var(--vscode-scrollbarSlider-hoverBackground, #555);
-}
-
-/* Welcome */
-.welcome {
-    text-align: center;
-    padding: 48px 20px 32px;
-}
-
-.welcome-title {
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: -0.3px;
-    margin-bottom: 6px;
-    color: var(--text-primary);
-}
-
-.welcome-desc {
-    font-size: 12px;
-    color: var(--text-secondary);
-    margin-bottom: 24px;
-    line-height: 1.5;
-}
-
-.quick-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 6px;
-}
-
-.quick-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 10px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    color: var(--text-secondary);
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 500;
-    transition: all var(--transition);
-    font-family: var(--font);
-}
-
-.quick-btn:hover {
-    border-color: var(--accent);
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
 
 /* ═══════════════════════════════════════
-   Step Container — 每步独立展示
+   Step Container — Continue 风格
+   每个 step 独立，操作按钮在下方
    ═══════════════════════════════════════ */
 
 .step {
-    margin-bottom: 16px;
-    animation: stepIn 0.2s ease;
+    position: relative;
+    margin: 0;
+    padding: 8px 12px;
 }
 
-@keyframes stepIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
+.step + .step {
+    border-top: 1px solid rgba(255,255,255,0.04);
 }
 
-.step-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 4px;
-    padding: 0 2px;
-}
-
-.step-role {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 2px 6px;
-    border-radius: 3px;
-}
-
-.step.user .step-role {
-    color: var(--accent);
-    background: rgba(14, 99, 156, 0.12);
-}
-
-.step.assistant .step-role {
-    color: var(--success);
-    background: rgba(78, 201, 176, 0.1);
-}
-
-.step.error .step-role {
-    color: var(--error);
-    background: rgba(244, 71, 71, 0.1);
-}
-
-.step-actions {
-    display: flex;
-    gap: 2px;
-    opacity: 0;
-    transition: opacity var(--transition);
-}
-
-.step:hover .step-actions {
-    opacity: 1;
-}
-
-.step-action-btn {
-    background: none;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 2px 5px;
-    border-radius: 3px;
-    font-size: 10px;
-    transition: all var(--transition);
-    font-family: var(--font);
-}
-
-.step-action-btn:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-}
-
-.step-body {
-    padding: 10px 12px;
-    border-radius: var(--radius);
-    line-height: 1.65;
+/* Step 内容 */
+.step-content {
     font-size: 13px;
+    line-height: 1.65;
 }
 
-.step.user .step-body {
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-}
-
-.step.assistant .step-body {
-    background: transparent;
-}
-
-.step.error .step-body {
-    background: rgba(244, 71, 71, 0.06);
-    border: 1px solid rgba(244, 71, 71, 0.2);
-    color: var(--error);
-}
-
-/* ═══════════════════════════════════════
-   Context Pills — 上下文标签
-   ═══════════════════════════════════════ */
-
-.context-pills {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    margin-bottom: 8px;
-}
-
-.context-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 8px;
-    background: var(--bg-tertiary);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    font-size: 10px;
-    color: var(--text-secondary);
-    font-family: var(--font-mono);
-}
-
-.context-pill .pill-icon {
-    width: 12px;
-    height: 12px;
-    opacity: 0.6;
-}
-
-/* ═══════════════════════════════════════
-   Code Blocks
-   ═══════════════════════════════════════ */
-
-.step-body pre {
-    background: var(--bg-primary);
+.step-content pre {
+    background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     margin: 8px 0;
@@ -325,7 +146,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 5px 10px;
+    padding: 4px 8px;
     background: rgba(0,0,0,0.2);
     border-bottom: 1px solid var(--border);
 }
@@ -349,18 +170,18 @@ body {
     color: var(--text-muted);
     cursor: pointer;
     font-size: 10px;
-    padding: 2px 6px;
+    padding: 2px 5px;
     border-radius: 3px;
-    transition: all var(--transition);
+    transition: all 0.15s ease;
     font-family: var(--font);
 }
 
 .code-action-btn:hover {
-    color: var(--text-primary);
+    color: var(--text);
     background: rgba(255,255,255,0.08);
 }
 
-.step-body pre code {
+.step-content pre code {
     display: block;
     padding: 10px 12px;
     overflow-x: auto;
@@ -369,72 +190,138 @@ body {
     line-height: 1.5;
 }
 
-.step-body code {
+.step-content code {
     font-family: var(--font-mono);
     font-size: 12px;
 }
 
-.step-body p code {
-    background: var(--bg-tertiary);
+.step-content p code {
+    background: var(--bg-input);
     padding: 1px 5px;
     border-radius: 3px;
 }
 
 /* Markdown */
-.step-body h1, .step-body h2, .step-body h3 {
+.step-content h1, .step-content h2, .step-content h3 {
     margin: 12px 0 6px;
     font-weight: 600;
 }
-.step-body h1 { font-size: 15px; }
-.step-body h2 { font-size: 14px; }
-.step-body h3 { font-size: 13px; }
+.step-content h1 { font-size: 15px; }
+.step-content h2 { font-size: 14px; }
+.step-content h3 { font-size: 13px; }
 
-.step-body ul, .step-body ol {
+.step-content ul, .step-content ol {
     margin: 6px 0;
     padding-left: 18px;
 }
-.step-body li { margin: 3px 0; }
+.step-content li { margin: 3px 0; }
 
-.step-body blockquote {
+.step-content blockquote {
     border-left: 2px solid var(--accent);
     padding-left: 10px;
     margin: 8px 0;
-    color: var(--text-secondary);
+    color: var(--text-desc);
 }
 
-.step-body a {
+.step-content a {
     color: var(--vscode-textLink-foreground, #3794ff);
     text-decoration: none;
 }
-.step-body a:hover { text-decoration: underline; }
+.step-content a:hover { text-decoration: underline; }
 
-.step-body hr {
+.step-content hr {
     border: none;
     border-top: 1px solid var(--border);
     margin: 10px 0;
 }
 
-.step-body table {
+.step-content table {
     border-collapse: collapse;
     width: 100%;
     margin: 8px 0;
     font-size: 12px;
 }
-.step-body th, .step-body td {
+.step-content th, .step-content td {
     border: 1px solid var(--border);
     padding: 5px 8px;
     text-align: left;
 }
-.step-body th {
-    background: var(--bg-secondary);
+.step-content th {
+    background: var(--bg-input);
     font-weight: 600;
 }
 
-.step-body strong { font-weight: 600; }
-.step-body em { font-style: italic; }
+.step-content strong { font-weight: 600; }
+.step-content em { font-style: italic; }
 
 /* ═══════════════════════════════════════
-   Diff View
+   Response Actions — Continue 风格
+   在 step 下方，右对齐，hover 显示
+   ═══════════════════════════════════════ */
+
+.response-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 2px;
+    padding: 4px 0 0;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    height: 24px;
+}
+
+.step:hover .response-actions {
+    opacity: 1;
+}
+
+.response-action-btn {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 11px;
+    transition: all 0.15s ease;
+    font-family: var(--font);
+}
+
+.response-action-btn:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+.response-action-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+/* ═══════════════════════════════════════
+   User Message — Continue 风格
+   用户消息用不同背景
+   ═══════════════════════════════════════ */
+
+.step.user .step-content {
+    color: var(--text);
+}
+
+.step.assistant .step-content {
+    color: var(--text);
+}
+
+.step.error .step-content {
+    color: var(--error);
+    background: rgba(244, 71, 71, 0.06);
+    border: 1px solid rgba(244, 71, 71, 0.2);
+    border-radius: var(--radius);
+    padding: 8px;
+}
+
+/* ═══════════════════════════════════════
+   Diff View — Continue 风格
    ═══════════════════════════════════════ */
 
 .diff-container {
@@ -444,21 +331,19 @@ body {
     overflow: hidden;
 }
 
-.diff-file { background: var(--bg-primary); }
-
 .diff-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 8px 12px;
-    background: var(--bg-secondary);
+    padding: 6px 10px;
+    background: var(--bg-input);
     border-bottom: 1px solid var(--border);
 }
 
 .diff-path {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-primary);
+    color: var(--text);
     font-weight: 500;
 }
 
@@ -473,7 +358,7 @@ body {
 .diff-del { color: var(--error); }
 
 .diff-body {
-    max-height: 300px;
+    max-height: 250px;
     overflow-y: auto;
 }
 
@@ -512,22 +397,25 @@ body {
     overflow-x: auto;
 }
 
+/* Diff Actions — Continue 风格按钮 */
 .diff-actions {
     display: flex;
+    align-items: center;
+    justify-content: flex-end;
     gap: 6px;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-top: 1px solid var(--border);
-    background: var(--bg-secondary);
+    background: var(--bg-input);
 }
 
 .diff-btn {
-    padding: 4px 12px;
+    padding: 3px 10px;
     border-radius: 4px;
     border: 1px solid var(--border);
     cursor: pointer;
     font-size: 11px;
     font-weight: 500;
-    transition: all var(--transition);
+    transition: all 0.15s ease;
     font-family: var(--font);
 }
 
@@ -541,12 +429,12 @@ body {
 
 .diff-btn.reject {
     background: transparent;
-    color: var(--text-secondary);
+    color: var(--text-desc);
 }
 
 .diff-btn.reject:hover {
-    color: var(--text-primary);
-    border-color: var(--text-secondary);
+    color: var(--text);
+    border-color: var(--text-desc);
 }
 
 .diff-btn.accept-all {
@@ -560,7 +448,7 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   Thinking Indicator
+   Thinking Indicator — Continue 风格
    ═══════════════════════════════════════ */
 
 .thinking {
@@ -595,23 +483,82 @@ body {
 
 /* ═══════════════════════════════════════
    Input Area — Continue 风格
+   固定在底部，上方有 toolbar
    ═══════════════════════════════════════ */
 
 .input-area {
-    padding: 10px 12px;
     border-top: 1px solid var(--border);
-    flex-shrink: 0;
+    background: var(--bg);
 }
 
-/* 上下文标签栏 */
-.input-context {
+/* Mode Toolbar — Continue 风格 */
+.input-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.toolbar-left {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Mode Switcher — Continue 风格下拉 */
+.mode-select {
+    position: relative;
+}
+
+.mode-btn {
+    background: none;
+    border: none;
+    color: var(--text-desc);
+    cursor: pointer;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    font-family: var(--font);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.mode-btn:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+.mode-btn.active {
+    color: var(--accent-text);
+    background: var(--accent);
+}
+
+.mode-btn .mode-key {
+    font-size: 9px;
+    opacity: 0.6;
+}
+
+/* Context Tags */
+.context-tags {
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    margin-bottom: 6px;
-    min-height: 20px;
-    max-height: 40px;
-    overflow: hidden;
+    padding: 4px 8px;
+    min-height: 0;
+}
+
+.context-tags:empty {
+    padding: 0;
 }
 
 .context-tag {
@@ -619,33 +566,30 @@ body {
     align-items: center;
     gap: 3px;
     padding: 2px 6px;
-    background: var(--bg-tertiary);
+    background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 10px;
-    color: var(--text-secondary);
+    color: var(--text-desc);
     font-family: var(--font-mono);
-    max-width: 180px;
+    max-width: 160px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.context-tag .tag-icon {
-    flex-shrink: 0;
-    opacity: 0.5;
-}
-
+/* Input Row */
 .input-row {
     display: flex;
     gap: 6px;
     align-items: flex-end;
+    padding: 8px;
 }
 
 #userInput {
     flex: 1;
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
+    background: var(--bg-input);
+    color: var(--text);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 8px 10px;
@@ -656,7 +600,7 @@ body {
     min-height: 36px;
     max-height: 120px;
     outline: none;
-    transition: border-color var(--transition);
+    transition: border-color 0.15s ease;
 }
 
 #userInput:focus { border-color: var(--border-focus); }
@@ -673,28 +617,25 @@ body {
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: background var(--transition);
+    transition: background 0.15s ease;
 }
 
 #sendBtn:hover:not(:disabled) { background: var(--accent-hover); }
 #sendBtn:disabled { opacity: 0.4; cursor: not-allowed; }
 #sendBtn svg { width: 14px; height: 14px; }
 
-/* 输入框底部工具栏 */
-.input-toolbar {
+/* Input Hint */
+.input-hint {
+    padding: 0 8px 6px;
+    font-size: 10px;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 5px;
-}
-
-.input-hint {
-    font-size: 10px;
-    color: var(--text-muted);
 }
 
 .input-hint kbd {
-    background: var(--bg-secondary);
+    background: var(--bg-input);
     padding: 1px 4px;
     border-radius: 3px;
     border: 1px solid var(--border);
@@ -702,22 +643,78 @@ body {
     font-family: var(--font-mono);
 }
 
-.input-meta {
+.input-mode-label {
     font-size: 10px;
     color: var(--text-muted);
-    display: flex;
-    align-items: center;
-    gap: 4px;
 }
 
 /* ═══════════════════════════════════════
-   Tool Results
+   Welcome / Empty State — Continue 风格
+   ═══════════════════════════════════════ */
+
+.welcome {
+    padding: 16px 12px;
+}
+
+.welcome-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 4px;
+}
+
+.welcome-desc {
+    font-size: 12px;
+    color: var(--text-desc);
+    margin-bottom: 16px;
+}
+
+.conversation-starters {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.starter-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-desc);
+    cursor: pointer;
+    font-size: 12px;
+    text-align: left;
+    transition: all 0.15s ease;
+    font-family: var(--font);
+}
+
+.starter-btn:hover {
+    border-color: var(--accent);
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+.starter-label {
+    font-weight: 500;
+    color: var(--text);
+}
+
+.starter-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
+   Tool Result
    ═══════════════════════════════════════ */
 
 .tool-result {
-    margin: 6px 0;
-    padding: 8px 10px;
-    background: var(--bg-secondary);
+    margin: 4px 0;
+    padding: 6px 8px;
+    background: var(--bg-input);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     font-size: 11px;
@@ -727,9 +724,9 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
     font-weight: 600;
-    color: var(--text-secondary);
+    color: var(--text-desc);
     text-transform: uppercase;
     font-size: 10px;
     letter-spacing: 0.5px;
@@ -738,69 +735,9 @@ body {
 .tool-result-body {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--text-secondary);
-    max-height: 200px;
+    color: var(--text-desc);
+    max-height: 150px;
     overflow-y: auto;
     white-space: pre-wrap;
     word-break: break-all;
-}
-
-/* ═══════════════════════════════════════
-   Inline Editor Edit — 编辑器内浮层
-   ═══════════════════════════════════════ */
-
-.inline-edit-widget {
-    position: fixed;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow);
-    padding: 8px;
-    z-index: 10000;
-    min-width: 280px;
-    max-width: 400px;
-}
-
-.inline-edit-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 6px;
-    font-size: 11px;
-    color: var(--text-secondary);
-    font-weight: 600;
-}
-
-.inline-edit-actions {
-    display: flex;
-    gap: 4px;
-}
-
-.inline-edit-btn {
-    padding: 3px 10px;
-    border-radius: 4px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    font-size: 11px;
-    font-weight: 500;
-    transition: all var(--transition);
-    font-family: var(--font);
-}
-
-.inline-edit-btn.accept {
-    background: var(--accent);
-    color: var(--accent-text);
-    border-color: var(--accent);
-}
-
-.inline-edit-btn.accept:hover { background: var(--accent-hover); }
-
-.inline-edit-btn.reject {
-    background: transparent;
-    color: var(--text-secondary);
-}
-
-.inline-edit-btn.reject:hover {
-    color: var(--text-primary);
-    border-color: var(--text-secondary);
 }
