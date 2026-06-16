@@ -2,8 +2,8 @@
 (function () {
     const vscode = acquireVsCodeApi();
 
-    // DOM
-    const messagesEl = document.getElementById('messages');
+    // DOM — 匹配新的 HTML 结构
+    const stepsArea = document.getElementById('stepsArea');
     const welcomeEl = document.getElementById('welcome');
     const thinkingEl = document.getElementById('thinking');
     const inputEl = document.getElementById('userInput');
@@ -11,15 +11,14 @@
     const clearBtnEl = document.getElementById('clearBtn');
     const settingsBtnEl = document.getElementById('settingsBtn');
     const contextArea = document.getElementById('inputContext');
+    const modeLabelEl = document.getElementById('modeLabel');
 
     let currentMode = 'ask';
-    let currentContext = []; // {type, label, icon}
-
-    // ═══════════════════════════════════════
-    // Mode Switcher — Ctrl+. 循环切换
-    // ═══════════════════════════════════════
-
     const modes = ['ask', 'plan', 'agent'];
+
+    // ═══════════════════════════════════════
+    // Mode Switcher — Continue 风格
+    // ═══════════════════════════════════════
 
     function setMode(mode) {
         currentMode = mode;
@@ -31,11 +30,9 @@
         var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
         inputEl.placeholder = placeholders[mode] || 'Ask anything...';
 
-        // 更新 meta 信息
-        var metaEl = document.querySelector('.input-meta');
-        if (metaEl) {
-            var modeLabels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
-            metaEl.textContent = modeLabels[mode] || '';
+        if (modeLabelEl) {
+            var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
+            modeLabelEl.textContent = labels[mode] || '';
         }
     }
 
@@ -51,34 +48,24 @@
         if ((e.metaKey || e.ctrlKey) && e.key === '.') {
             e.preventDefault();
             var idx = modes.indexOf(currentMode);
-            var next = modes[(idx + 1) % modes.length];
-            setMode(next);
+            setMode(modes[(idx + 1) % modes.length]);
             focusInput();
         }
     });
 
     // ═══════════════════════════════════════
-    // Context Management
+    // Context Tags
     // ═══════════════════════════════════════
 
     function updateContextPills(contexts) {
-        currentContext = contexts || [];
+        if (!contextArea) return;
         contextArea.innerHTML = '';
-        if (currentContext.length === 0) return;
+        if (!contexts || contexts.length === 0) return;
 
-        currentContext.forEach(function(ctx) {
+        contexts.forEach(function(ctx) {
             var tag = document.createElement('span');
             tag.className = 'context-tag';
-
-            var icon = document.createElement('span');
-            icon.className = 'tag-icon';
-            icon.innerHTML = ctx.icon || '';
-
-            var label = document.createElement('span');
-            label.textContent = ctx.label;
-
-            tag.appendChild(icon);
-            tag.appendChild(label);
+            tag.textContent = ctx.label;
             contextArea.appendChild(tag);
         });
     }
@@ -92,6 +79,7 @@
         if (!text) return;
 
         welcomeEl.style.display = 'none';
+        thinkingEl.style.display = 'none';
         appendStep(text, 'user');
         vscode.postMessage({ command: 'sendMessage', text: text });
 
@@ -119,9 +107,11 @@
 
     clearBtnEl.addEventListener('click', function(e) {
         e.preventDefault();
-        messagesEl.innerHTML = '';
-        messagesEl.appendChild(welcomeEl);
+        // 清除所有 step，保留 welcome 和 thinking
+        var steps = stepsArea.querySelectorAll('.step');
+        steps.forEach(function(s) { s.remove(); });
         welcomeEl.style.display = '';
+        thinkingEl.style.display = '';
         vscode.postMessage({ command: 'clearChat' });
         focusInput();
     });
@@ -132,10 +122,10 @@
     });
 
     // ═══════════════════════════════════════
-    // Quick Actions
+    // Conversation Starters
     // ═══════════════════════════════════════
 
-    document.querySelectorAll('.quick-btn').forEach(function(btn) {
+    document.querySelectorAll('.starter-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var prompt = this.getAttribute('data-prompt');
             if (prompt) { inputEl.value = prompt; focusInput(); }
@@ -144,51 +134,58 @@
 
     // ═══════════════════════════════════════
     // Step Container — Continue 风格
+    // 每个 step 独立，操作按钮在下方
     // ═══════════════════════════════════════
 
     function appendStep(text, role) {
         var step = document.createElement('div');
         step.className = 'step ' + role;
 
-        // Header
-        var header = document.createElement('div');
-        header.className = 'step-header';
+        // Step Content
+        var content = document.createElement('div');
+        content.className = 'step-content';
+        content.innerHTML = renderMarkdown(text);
 
-        var roleLabel = document.createElement('span');
-        roleLabel.className = 'step-role';
-        var roleNames = { user: 'You', assistant: 'AI', error: 'Error', system: 'System', tool: 'Tool' };
-        roleLabel.textContent = roleNames[role] || role;
+        step.appendChild(content);
 
-        var actions = document.createElement('div');
-        actions.className = 'step-actions';
-
+        // Response Actions — Continue 风格，右对齐
         if (role === 'assistant') {
-            var copyBtn = document.createElement('button');
-            copyBtn.className = 'step-action-btn';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', function() {
+            var actions = document.createElement('div');
+            actions.className = 'response-actions';
+
+            var copyBtn = createActionButton('Copy', function() {
                 vscode.postMessage({ command: 'copyCode', code: text });
-                copyBtn.textContent = 'Copied';
-                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
             });
             actions.appendChild(copyBtn);
+
+            step.appendChild(actions);
         }
 
-        header.appendChild(roleLabel);
-        header.appendChild(actions);
+        // User 消息也需要一个 actions 区域保持布局一致
+        if (role === 'user') {
+            var userActions = document.createElement('div');
+            userActions.className = 'response-actions';
+            step.appendChild(userActions);
+        }
 
-        // Body
-        var body = document.createElement('div');
-        body.className = 'step-body';
-        body.innerHTML = renderMarkdown(text);
-
-        step.appendChild(header);
-        step.appendChild(body);
-        messagesEl.appendChild(step);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        // 插入到 thinking 之前
+        stepsArea.insertBefore(step, thinkingEl);
+        stepsArea.scrollTop = stepsArea.scrollHeight;
 
         // 代码块操作栏
         addCodeActions(step);
+    }
+
+    function createActionButton(label, onClick) {
+        var btn = document.createElement('button');
+        btn.className = 'response-action-btn';
+        btn.textContent = label;
+        btn.addEventListener('click', function() {
+            onClick();
+            btn.textContent = 'Done';
+            setTimeout(function() { btn.textContent = label; }, 1500);
+        });
+        return btn;
     }
 
     function addCodeActions(container) {
@@ -236,7 +233,7 @@
     }
 
     // ═══════════════════════════════════════
-    // Diff Display — Continue 风格内联 diff
+    // Diff Display — Continue 风格
     // ═══════════════════════════════════════
 
     function showDiff(filePath, html) {
@@ -245,27 +242,20 @@
         var step = document.createElement('div');
         step.className = 'step assistant';
 
-        var header = document.createElement('div');
-        header.className = 'step-header';
-        var roleLabel = document.createElement('span');
-        roleLabel.className = 'step-role';
-        roleLabel.textContent = 'AI';
-        header.appendChild(roleLabel);
-
-        var body = document.createElement('div');
-        body.className = 'step-body';
+        var content = document.createElement('div');
+        content.className = 'step-content';
 
         var desc = document.createElement('div');
-        desc.style.cssText = 'margin-bottom:8px;font-size:12px;color:var(--text-secondary);';
+        desc.style.cssText = 'margin-bottom:8px;font-size:12px;color:var(--text-desc);';
         desc.textContent = 'Proposed changes to ' + filePath;
 
         var diffContainer = document.createElement('div');
         diffContainer.className = 'diff-container';
         diffContainer.innerHTML = html;
 
-        // Accept/Reject 按钮 — Continue 风格
-        var actions = document.createElement('div');
-        actions.className = 'diff-actions';
+        // Diff Actions — Continue 风格
+        var diffActions = document.createElement('div');
+        diffActions.className = 'diff-actions';
 
         var acceptBtn = document.createElement('button');
         acceptBtn.className = 'diff-btn accept';
@@ -289,17 +279,22 @@
             vscode.postMessage({ command: 'applyAllDiffs' });
         });
 
-        actions.appendChild(acceptBtn);
-        actions.appendChild(rejectBtn);
-        actions.appendChild(acceptAllBtn);
+        diffActions.appendChild(acceptBtn);
+        diffActions.appendChild(rejectBtn);
+        diffActions.appendChild(acceptAllBtn);
 
-        diffContainer.appendChild(actions);
-        body.appendChild(desc);
-        body.appendChild(diffContainer);
-        step.appendChild(header);
-        step.appendChild(body);
-        messagesEl.appendChild(step);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        diffContainer.appendChild(diffActions);
+        content.appendChild(desc);
+        content.appendChild(diffContainer);
+        step.appendChild(content);
+
+        // Response actions
+        var actions = document.createElement('div');
+        actions.className = 'response-actions';
+        step.appendChild(actions);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        stepsArea.scrollTop = stepsArea.scrollHeight;
     }
 
     // ═══════════════════════════════════════
@@ -308,7 +303,13 @@
 
     function showToolResult(type, data) {
         var div = document.createElement('div');
-        div.className = 'tool-result';
+        div.className = 'step assistant';
+
+        var content = document.createElement('div');
+        content.className = 'step-content';
+
+        var result = document.createElement('div');
+        result.className = 'tool-result';
 
         var header = document.createElement('div');
         header.className = 'tool-result-header';
@@ -318,10 +319,18 @@
         body.className = 'tool-result-body';
         body.textContent = data;
 
-        div.appendChild(header);
-        div.appendChild(body);
-        messagesEl.appendChild(div);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        result.appendChild(header);
+        result.appendChild(body);
+        content.appendChild(result);
+        div.appendChild(content);
+
+        // Response actions
+        var actions = document.createElement('div');
+        actions.className = 'response-actions';
+        div.appendChild(actions);
+
+        stepsArea.insertBefore(div, thinkingEl);
+        stepsArea.scrollTop = stepsArea.scrollHeight;
     }
 
     // ═══════════════════════════════════════
@@ -362,7 +371,7 @@
 
     function focusInput() { if (inputEl) inputEl.focus(); }
 
-    messagesEl.addEventListener('click', function(e) {
+    stepsArea.addEventListener('click', function(e) {
         if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) { focusInput(); }
     });
 
@@ -386,9 +395,10 @@
                 focusInput();
                 break;
             case 'clearChat':
-                messagesEl.innerHTML = '';
-                messagesEl.appendChild(welcomeEl);
+                var steps = stepsArea.querySelectorAll('.step');
+                steps.forEach(function(s) { s.remove(); });
                 welcomeEl.style.display = '';
+                thinkingEl.style.display = '';
                 break;
             case 'modeChanged':
                 setMode(msg.mode);
@@ -397,11 +407,17 @@
                 showDiff(msg.filePath, msg.html);
                 break;
             case 'diffApplied':
-                var applied = document.createElement('div');
-                applied.className = 'tool-result';
-                applied.innerHTML = '<div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved. Changes highlighted in editor.</div>';
-                messagesEl.appendChild(applied);
-                messagesEl.scrollTop = messagesEl.scrollHeight;
+                var appliedStep = document.createElement('div');
+                appliedStep.className = 'step assistant';
+                var appliedContent = document.createElement('div');
+                appliedContent.className = 'step-content';
+                appliedContent.innerHTML = '<div class="tool-result"><div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved. Changes highlighted in editor.</div></div>';
+                appliedStep.appendChild(appliedContent);
+                var appliedActions = document.createElement('div');
+                appliedActions.className = 'response-actions';
+                appliedStep.appendChild(appliedActions);
+                stepsArea.insertBefore(appliedStep, thinkingEl);
+                stepsArea.scrollTop = stepsArea.scrollHeight;
                 break;
             case 'diffRejected':
                 break;

@@ -309,66 +309,91 @@ ${modeSuffix}`;
     <title>Dify AI</title>
 </head>
 <body>
-    <div class="header">
-        <div class="mode-switcher">
-            <button class="mode-btn active" data-mode="ask">Ask</button>
-            <button class="mode-btn" data-mode="plan">Plan</button>
-            <button class="mode-btn" data-mode="agent">Agent</button>
-        </div>
-        <div class="header-actions">
-            <button class="icon-btn" id="clearBtn" title="New Chat">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M2 2h12M5 2V1h6v1M3 2v11a1 1 0 001 1h8a1 1 0 001-1V2"/>
-                </svg>
-            </button>
-            <button class="icon-btn" id="settingsBtn" title="Settings">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <circle cx="8" cy="8" r="2.5"/>
-                    <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
-                </svg>
-            </button>
-        </div>
-    </div>
+    <div class="grid-layout">
+        <!-- Steps Area — 消息滚动区 -->
+        <div class="steps-area" id="stepsArea">
+            <div class="welcome" id="welcome">
+                <div class="welcome-title">Dify Code Assistant</div>
+                <div class="welcome-desc">Ask questions, plan tasks, or let the agent write code.</div>
+                <div class="conversation-starters">
+                    <button class="starter-btn" data-prompt="Explain this code">
+                        <div>
+                            <div class="starter-label">Explain</div>
+                            <div class="starter-desc">Describe what the selected code does</div>
+                        </div>
+                    </button>
+                    <button class="starter-btn" data-prompt="Find and fix bugs in this code">
+                        <div>
+                            <div class="starter-label">Fix Bugs</div>
+                            <div class="starter-desc">Identify and resolve issues</div>
+                        </div>
+                    </button>
+                    <button class="starter-btn" data-prompt="Refactor this code to improve readability">
+                        <div>
+                            <div class="starter-label">Refactor</div>
+                            <div class="starter-desc">Improve code structure and readability</div>
+                        </div>
+                    </button>
+                    <button class="starter-btn" data-prompt="Write unit tests for this code">
+                        <div>
+                            <div class="starter-label">Write Tests</div>
+                            <div class="starter-desc">Generate test cases</div>
+                        </div>
+                    </button>
+                </div>
+            </div>
 
-    <div class="messages" id="messages">
-        <div class="welcome" id="welcome">
-            <div class="welcome-title">Dify Code Assistant</div>
-            <div class="welcome-desc">Ask questions, plan tasks, or let the agent write code.</div>
-            <div class="quick-actions">
-                <button class="quick-btn" data-prompt="Explain this code">
-                    <span>Explain</span>
-                </button>
-                <button class="quick-btn" data-prompt="Find and fix bugs">
-                    <span>Fix Bugs</span>
-                </button>
-                <button class="quick-btn" data-prompt="Refactor this code">
-                    <span>Refactor</span>
-                </button>
-                <button class="quick-btn" data-prompt="Write tests for this code">
-                    <span>Write Tests</span>
-                </button>
+            <!-- Thinking Indicator -->
+            <div class="thinking" id="thinking">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <span>Thinking...</span>
             </div>
         </div>
-    </div>
 
-    <div class="thinking" id="thinking">
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <div class="dot"></div>
-        <span>Thinking...</span>
-    </div>
+        <!-- Input Area — Continue 风格，固定底部 -->
+        <div class="input-area">
+            <!-- Mode Toolbar -->
+            <div class="input-toolbar">
+                <div class="toolbar-left">
+                    <button class="mode-btn active" data-mode="ask">Ask</button>
+                    <button class="mode-btn" data-mode="plan">Plan</button>
+                    <button class="mode-btn" data-mode="agent">Agent</button>
+                </div>
+                <div class="toolbar-right">
+                    <button class="icon-btn" id="clearBtn" title="New Chat">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <path d="M2 2h12M5 2V1h6v1M3 2v11a1 1 0 001 1h8a1 1 0 001-1V2"/>
+                        </svg>
+                    </button>
+                    <button class="icon-btn" id="settingsBtn" title="Settings">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="8" cy="8" r="2.5"/>
+                            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
 
-    <div class="input-area">
-        <div class="input-row">
-            <textarea id="userInput" placeholder="Ask anything..." rows="1"></textarea>
-            <button id="sendBtn" title="Send (Enter)">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <path d="M14 2L7 9M14 2l-5 12-3-7-7-3 12-5z"/>
-                </svg>
-            </button>
-        </div>
-        <div class="hint">
-            <kbd>Enter</kbd> send / <kbd>Shift+Enter</kbd> newline
+            <!-- Context Tags -->
+            <div class="context-tags" id="inputContext"></div>
+
+            <!-- Input Row -->
+            <div class="input-row">
+                <textarea id="userInput" placeholder="Ask anything..." rows="1"></textarea>
+                <button id="sendBtn" title="Send (Enter)">
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                        <path d="M14 2L7 9M14 2l-5 12-3-7-7-3 12-5z"/>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Hint -->
+            <div class="input-hint">
+                <span><kbd>Enter</kbd> send / <kbd>Shift+Enter</kbd> newline</span>
+                <span class="input-mode-label" id="modeLabel">Ask mode</span>
+            </div>
         </div>
     </div>
 
