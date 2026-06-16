@@ -198,26 +198,29 @@ body {
     line-height: 1.5;
 }
 
-/* Line Numbers */
-pre.has-line-numbers code {
-    padding-left: 0;
+/* Line Numbers Gutter — no layout shift */
+pre.has-gutter {
+    display: flex;
 }
 
-pre.has-line-numbers .line-num {
-    display: inline-block;
-    width: 32px;
+pre.has-gutter .line-gutter {
+    flex-shrink: 0;
+    padding: 10px 8px 10px 8px;
     text-align: right;
-    padding-right: 10px;
-    margin-right: 10px;
     color: var(--text-muted);
-    border-right: 1px solid var(--border);
-    user-select: none;
+    font-family: var(--font-mono);
     font-size: 10px;
-    opacity: 0.6;
+    line-height: 1.5;
+    opacity: 0.5;
+    user-select: none;
+    border-right: 1px solid var(--border);
+    white-space: pre;
+    pointer-events: none;
 }
 
-pre.has-line-numbers .line-num::after {
-    content: '';
+pre.has-gutter code {
+    flex: 1;
+    min-width: 0;
 }
 
 .step-content code {

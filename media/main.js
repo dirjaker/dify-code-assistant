@@ -719,14 +719,18 @@
             var langMatch = code.className.match(/language-(\w+)/);
             var lang = langMatch ? langMatch[1] : 'code';
 
-            // Add line numbers
-            var lines = code.innerHTML.split('\n');
-            if (lines.length > 2) {
-                var numberedHtml = lines.map(function(line, i) {
-                    return '<span class="line-num">' + (i + 1) + '</span>' + line;
-                }).join('\n');
-                code.innerHTML = numberedHtml;
-                pre.classList.add('has-line-numbers');
+            // Add line numbers as a side gutter (no layout shift)
+            var lineCount = code.textContent.split('\n').length;
+            if (lineCount > 2) {
+                var gutter = document.createElement('div');
+                gutter.className = 'line-gutter';
+                var nums = [];
+                for (var i = 1; i <= lineCount; i++) {
+                    nums.push(i);
+                }
+                gutter.textContent = nums.join('\n');
+                pre.insertBefore(gutter, pre.firstChild);
+                pre.classList.add('has-gutter');
             }
 
             var bar = document.createElement('div');
@@ -970,25 +974,39 @@
         thinkingEl.classList.add('streaming');
     }
 
+    var streamRenderTimer = null;
+
     function appendStreamChunk(chunk) {
         if (!streamingContent) return;
         streamBuffer += chunk;
 
-        var rendered = renderStreamingMarkdown(streamBuffer);
-        streamingContent.innerHTML = rendered;
+        // Debounce: 60fps max, batch chunks
+        if (streamRenderTimer) return;
+        streamRenderTimer = requestAnimationFrame(function() {
+            streamRenderTimer = null;
+            if (!streamingContent) return;
 
-        // 只在用户没有手动滚动时自动滚到底部
-        if (!userScrolledUp) {
-            stepsArea.scrollTop = stepsArea.scrollHeight;
-        }
+            // Use lighter rendering during streaming (no line numbers)
+            var rendered = renderStreamingMarkdown(streamBuffer);
+            streamingContent.innerHTML = rendered;
+
+            if (!userScrolledUp) {
+                stepsArea.scrollTop = stepsArea.scrollHeight;
+            }
+        });
     }
 
     function endStream() {
+        // Flush any pending render
+        if (streamRenderTimer) {
+            clearTimeout(streamRenderTimer);
+            streamRenderTimer = null;
+        }
+
         if (streamingStep) {
-            // 移除 streaming 光标
             streamingContent.classList.remove('streaming');
 
-            // 最终渲染完整 markdown
+            // Final render with syntax highlighting
             streamingContent.innerHTML = renderMarkdown(streamBuffer);
             addCodeActions(streamingContent);
 
@@ -1011,6 +1029,10 @@
     }
 
     function cancelStream() {
+        if (streamRenderTimer) {
+            cancelAnimationFrame(streamRenderTimer);
+            streamRenderTimer = null;
+        }
         if (streamingStep) {
             streamingContent.classList.remove('streaming');
             streamingContent.innerHTML = renderMarkdown(streamBuffer + '\n\n*[Cancelled]*');
@@ -1036,38 +1058,38 @@
     function renderStreamingMarkdown(text) {
         var html = text;
 
-        // 处理未闭合的代码块（流式输出时常见）
+        // Close unclosed code blocks
         var codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
         var lastCodeBlockEnd = 0;
         var match;
-
         while ((match = codeBlockRegex.exec(html)) !== null) {
             lastCodeBlockEnd = match.index + match[0].length;
         }
-
-        // 如果有未闭合的代码块，手动闭合它
-        var openBlockStart = html.lastIndexOf('```', lastCodeBlockEnd > 0 ? lastCodeBlockEnd : 0);
-        if (openBlockStart > lastCodeBlockEnd - 10 || (lastCodeBlockEnd === 0 && html.includes('```'))) {
-            // 检查是否有未闭合的代码块
-            var afterLastClose = html.substring(lastCodeBlockEnd);
-            if (afterLastClose.includes('```') || (lastCodeBlockEnd === 0 && html.indexOf('```') !== -1)) {
-                // 有未闭合的代码块，手动闭合
-                var parts = html.split('```');
-                if (parts.length % 2 === 0) {
-                    // 奇数个 ``` 表示有未闭合的代码块
-                    html += '\n```';
-                }
-            }
+        var parts = html.split('```');
+        if (parts.length % 2 === 0) {
+            html += '\n```';
         }
 
-        // Apply syntax highlighting to closed code blocks
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
-            var langClass = lang || 'text';
-            var highlighted = highlightSyntax(escapeHtml(code.trim()), lang);
-            return '<pre><code class="language-' + langClass + '">' + highlighted + '</code></pre>';
+        // During streaming: plain rendering (no syntax highlighting, no line numbers)
+        // This prevents flickering from re-tokenizing on every frame
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
+            return '<pre><code class="language-' + (lang || 'text') + '">' + escapeHtml(code.trim()) + '</code></pre>';
         });
 
-        return html;
+        // Basic markdown (same as renderMarkdown but lighter)
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
+        html = html.replace(/^---$/gm, '<hr>');
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = html.replace(/\n/g, '<br>');
+
+        return '<p>' + html + '</p>';
     }
 
     // 监听用户滚动，判断是否手动滚动上去
