@@ -1,8 +1,8 @@
 {
   "name": "dify-code-assistant",
   "displayName": "Dify Code Assistant",
-  "description": "\u57fa\u4e8e Dify \u7684 VS Code AI \u7f16\u7a0b\u52a9\u624b\uff0c\u652f\u6301\u667a\u80fd\u5bf9\u8bdd\u3001\u4ee3\u7801\u8865\u5168\u3001\u4ee3\u7801\u89e3\u91ca\u548c\u91cd\u6784",
-  "version": "0.1.1",
+  "description": "基于 Dify 的 VS Code AI 编程助手，支持智能对话、代码补全、代码解释和重构",
+  "version": "0.2.0",
   "publisher": "dirjaker",
   "engines": {
     "vscode": "^1.85.0"
@@ -17,30 +17,53 @@
   "activationEvents": [],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dify-sidebar",
+          "title": "Dify AI",
+          "icon": "resources/sidebar-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "dify-sidebar": [
+        {
+          "type": "webview",
+          "id": "difyChatView",
+          "name": "AI 助手"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "dify.openChat",
-        "title": "Dify: Open Chat",
+        "title": "打开 AI 助手",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "dify.explainCode",
-        "title": "Dify: Explain Code",
+        "title": "AI: 解释代码",
         "icon": "$(book)"
       },
       {
         "command": "dify.refactorCode",
-        "title": "Dify: Refactor Code",
+        "title": "AI: 重构代码",
         "icon": "$(wrench)"
       },
       {
         "command": "dify.fixCode",
-        "title": "Dify: Fix Code",
+        "title": "AI: 修复代码",
         "icon": "$(bug)"
       },
       {
+        "command": "dify.completeCode",
+        "title": "AI: 生成代码",
+        "icon": "$(sparkle)"
+      },
+      {
         "command": "dify.settings",
-        "title": "Dify: Settings",
+        "title": "AI: 设置",
         "icon": "$(gear)"
       }
     ],
@@ -50,7 +73,7 @@
         "dify.apiUrl": {
           "type": "string",
           "default": "http://192.168.31.100:9000",
-          "description": "Dify API URL"
+          "description": "Dify API 地址"
         },
         "dify.apiKey": {
           "type": "string",
@@ -59,18 +82,18 @@
         },
         "dify.model": {
           "type": "string",
-          "default": "deepseek-coder",
-          "description": "Model name in Dify"
+          "default": "deepseek-v4-pro",
+          "description": "使用的模型名称"
         },
         "dify.enableAutocomplete": {
           "type": "boolean",
           "default": true,
-          "description": "Enable inline code completion"
+          "description": "启用内联代码补全"
         },
         "dify.maxTokens": {
           "type": "number",
-          "default": 2048,
-          "description": "Maximum tokens for response"
+          "default": 4096,
+          "description": "最大响应 token 数"
         }
       }
     },
@@ -89,14 +112,33 @@
           "group": "dify@1"
         },
         {
-          "command": "dify.refactorCode",
+          "command": "dify.fixCode",
           "when": "editorHasSelection",
           "group": "dify@2"
         },
         {
-          "command": "dify.fixCode",
+          "command": "dify.refactorCode",
           "when": "editorHasSelection",
           "group": "dify@3"
+        },
+        {
+          "command": "dify.completeCode",
+          "when": "editorHasSelection",
+          "group": "dify@4"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "dify.explainCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "dify.fixCode",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "dify.refactorCode",
+          "when": "editorHasSelection"
         }
       ]
     }
@@ -105,7 +147,7 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "package": "vsce package",
+    "package": "vsce package --allow-missing-repository",
     "lint": "eslint src --ext ts"
   },
   "devDependencies": {
