@@ -27,7 +27,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         webviewView.webview.html = this._getHtml(webviewView.webview);
 
-        // 处理来自 webview 的消息
         webviewView.webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
                 case 'sendMessage':
@@ -35,7 +34,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'clearChat':
                     this._client.resetConversation();
-                    this._view?.webview.postMessage({ command: 'clearChat' });
+                    this._postMessage({ command: 'clearChat' });
                     break;
                 case 'insertCode':
                     await this._insertCode(message.code);
@@ -50,7 +49,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        // 当视图可见时聚焦输入框
         webviewView.onDidChangeVisibility(() => {
             if (webviewView.visible) {
                 this._postMessage({ command: 'focusInput' });
@@ -65,11 +63,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     public sendToChat(text: string, role: string = 'system'): void {
-        this._postMessage({
-            command: 'receiveMessage',
-            text: text,
-            role: role
-        });
+        this._postMessage({ command: 'receiveMessage', text, role });
     }
 
     private async _handleMessage(text: string): Promise<void> {
@@ -84,18 +78,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 3. 如果不确定，诚实说明`;
 
             const response = await this._client.chat(text, systemPrompt);
-
-            this._postMessage({
-                command: 'receiveMessage',
-                text: response.answer,
-                role: 'assistant'
-            });
+            this._postMessage({ command: 'receiveMessage', text: response.answer, role: 'assistant' });
         } catch (error: any) {
-            this._postMessage({
-                command: 'receiveMessage',
-                text: '错误: ' + error.message,
-                role: 'error'
-            });
+            this._postMessage({ command: 'receiveMessage', text: '错误: ' + error.message, role: 'error' });
         } finally {
             this._postMessage({ command: 'stopThinking' });
         }
@@ -114,11 +99,16 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     private _getHtml(webview: vscode.Webview): string {
-        return /*html*/`<!DOCTYPE html>
+        // 使用 webview.cspSource 获取正确的 CSP 源
+        const cspSource = webview.cspSource;
+        const nonce = getNonce();
+
+        return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
     <title>Dify AI</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -134,7 +124,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             overflow: hidden;
         }
 
-        /* 工具栏 */
         .toolbar {
             display: flex;
             align-items: center;
@@ -144,10 +133,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             border-bottom: 1px solid var(--vscode-panel-border, #3c3c3c);
         }
 
-        .toolbar-title {
-            font-size: 12px;
-            font-weight: 600;
-        }
+        .toolbar-title { font-size: 12px; font-weight: 600; }
 
         .toolbar-btn {
             background: none;
@@ -164,7 +150,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             background: var(--vscode-toolbar-hoverBackground, rgba(255,255,255,0.1));
         }
 
-        /* 消息区 */
         .messages {
             flex: 1;
             overflow-y: auto;
@@ -174,7 +159,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         .messages::-webkit-scrollbar { width: 6px; }
         .messages::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, #666); border-radius: 3px; }
 
-        /* 欢迎 */
         .welcome {
             text-align: center;
             padding: 40px 20px;
@@ -211,7 +195,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         .quick-btn-icon { font-size: 18px; }
 
-        /* 消息 */
         .msg { margin-bottom: 16px; }
 
         .msg-header {
@@ -259,7 +242,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             border: 1px solid rgba(244, 71, 71, 0.3);
         }
 
-        /* 代码块 */
         .msg-body pre {
             background: var(--vscode-textCodeBlock-background, #1e1e1e);
             border: 1px solid var(--vscode-panel-border, #3c3c3c);
@@ -311,7 +293,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             border-radius: 4px;
         }
 
-        /* 思考中 */
         .thinking {
             display: none;
             padding: 8px 12px;
@@ -341,7 +322,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             color: var(--vscode-descriptionForeground, #999);
         }
 
-        /* 输入区 */
         .input-area {
             padding: 12px;
             border-top: 1px solid var(--vscode-panel-border, #3c3c3c);
@@ -391,15 +371,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             background: var(--vscode-button-hoverBackground, #1177bb);
         }
 
-        #sendBtn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        #sendBtn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        #sendBtn svg {
-            width: 16px;
-            height: 16px;
-        }
+        #sendBtn svg { width: 16px; height: 16px; }
 
         .hint {
             font-size: 10px;
@@ -416,7 +390,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             font-size: 10px;
         }
 
-        /* Markdown */
         .msg-body h1, .msg-body h2, .msg-body h3 { margin: 10px 0 6px; font-weight: 600; }
         .msg-body h1 { font-size: 16px; }
         .msg-body h2 { font-size: 14px; }
@@ -484,10 +457,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
         const vscode = acquireVsCodeApi();
 
-        // DOM 元素
         const messagesEl = document.getElementById('messages');
         const welcomeEl = document.getElementById('welcome');
         const thinkingEl = document.getElementById('thinking');
@@ -495,12 +467,10 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         const sendBtnEl = document.getElementById('sendBtn');
         const clearBtnEl = document.getElementById('clearBtn');
 
-        // 聚焦输入框
         function focusInput() {
             inputEl.focus();
         }
 
-        // 发送消息
         function doSend() {
             const text = inputEl.value.trim();
             if (!text) return;
@@ -513,7 +483,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             focusInput();
         }
 
-        // 清空对话
         function doClear() {
             messagesEl.innerHTML = '';
             messagesEl.appendChild(welcomeEl);
@@ -521,7 +490,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             vscode.postMessage({ command: 'clearChat' });
         }
 
-        // 添加消息
         function appendMessage(text, role) {
             const div = document.createElement('div');
             div.className = 'msg ' + role;
@@ -531,7 +499,17 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
             const header = document.createElement('div');
             header.className = 'msg-header';
-            header.innerHTML = '<div class="msg-avatar">' + (icons[role] || '💬') + '</div><span class="msg-name">' + (names[role] || role) + '</span>';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'msg-avatar';
+            avatar.textContent = icons[role] || '💬';
+
+            const name = document.createElement('span');
+            name.className = 'msg-name';
+            name.textContent = names[role] || role;
+
+            header.appendChild(avatar);
+            header.appendChild(name);
 
             const body = document.createElement('div');
             body.className = 'msg-body';
@@ -572,41 +550,24 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             });
         }
 
-        // 渲染 Markdown
         function renderMarkdown(text) {
             let html = text;
 
-            // 代码块
             html = html.replace(/\`\`\`(\w*)\n([\s\S]*?)\`\`\`/g, function(match, lang, code) {
                 return '<pre><code class="language-' + (lang || 'text') + '">' + escapeHtml(code.trim()) + '</code></pre>';
             });
 
-            // 行内代码
             html = html.replace(/\`([^\`]+)\`/g, '<code>$1</code>');
-
-            // 标题
             html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
             html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
             html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-
-            // 粗体斜体
             html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
             html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-
-            // 链接
             html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-
-            // 列表
             html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
             html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-
-            // 引用
             html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-
-            // 分割线
             html = html.replace(/^---$/gm, '<hr>');
-
-            // 换行
             html = html.replace(/\n\n/g, '</p><p>');
             html = html.replace(/\n/g, '<br>');
 
@@ -622,15 +583,12 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 .replace(/'/g, '&#039;');
         }
 
-        // ============ 事件绑定 ============
-
-        // 发送按钮
+        // 事件绑定
         sendBtnEl.addEventListener('click', function(e) {
             e.preventDefault();
             doSend();
         });
 
-        // Enter 键
         inputEl.addEventListener('keydown', function(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -638,40 +596,34 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        // 自动调整高度
         inputEl.addEventListener('input', function() {
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
 
-        // 清空按钮
         clearBtnEl.addEventListener('click', function(e) {
             e.preventDefault();
             doClear();
         });
 
-        // 快捷按钮
-        var quickBtns = document.querySelectorAll('.quick-btn');
-        for (var i = 0; i < quickBtns.length; i++) {
-            quickBtns[i].addEventListener('click', function() {
-                var prompt = this.getAttribute('data-prompt');
+        document.querySelectorAll('.quick-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                const prompt = this.getAttribute('data-prompt');
                 if (prompt) {
                     inputEl.value = prompt;
                     focusInput();
                 }
             });
-        }
+        });
 
-        // 点击消息区聚焦
         messagesEl.addEventListener('click', function(e) {
             if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
                 focusInput();
             }
         });
 
-        // 监听扩展消息
         window.addEventListener('message', function(event) {
-            var msg = event.data;
+            const msg = event.data;
             switch (msg.command) {
                 case 'receiveMessage':
                     appendMessage(msg.text, msg.role);
@@ -696,10 +648,18 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             }
         });
 
-        // 初始聚焦
         focusInput();
     </script>
 </body>
 </html>`;
     }
+}
+
+function getNonce(): string {
+    let text = '';
+    const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    for (let i = 0; i < 32; i++) {
+        text += possible.charAt(Math.floor(Math.random() * possible.length));
+    }
+    return text;
 }
