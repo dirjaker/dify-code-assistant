@@ -719,18 +719,10 @@
             var langMatch = code.className.match(/language-(\w+)/);
             var lang = langMatch ? langMatch[1] : 'code';
 
-            // Add line numbers as a side gutter (no layout shift)
+            // Line numbers via CSS counters (zero DOM modification)
             var lineCount = code.textContent.split('\n').length;
             if (lineCount > 2) {
-                var gutter = document.createElement('div');
-                gutter.className = 'line-gutter';
-                var nums = [];
-                for (var i = 1; i <= lineCount; i++) {
-                    nums.push(i);
-                }
-                gutter.textContent = nums.join('\n');
-                pre.insertBefore(gutter, pre.firstChild);
-                pre.classList.add('has-gutter');
+                pre.classList.add('has-linenums');
             }
 
             var bar = document.createElement('div');
@@ -939,6 +931,16 @@
     // ═══════════════════════════════════════
 
     function focusInput() { if (inputEl) inputEl.focus(); }
+
+    // Close dropdowns on outside click
+    document.addEventListener('click', function(e) {
+        if (isFileDropdownOpen && !e.target.closest('.file-dropdown') && e.target !== inputEl) {
+            closeFileDropdown();
+        }
+        if (isSlashDropdownOpen && !e.target.closest('.slash-dropdown') && e.target !== inputEl) {
+            closeSlashDropdown();
+        }
+    });
 
     stepsArea.addEventListener('click', function(e) {
         if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) { focusInput(); }
