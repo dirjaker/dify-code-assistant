@@ -25,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
     decorationManager = new DecorationManager();
 
     // 注册侧边栏视图
-    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager);
+    chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager, context);
     context.subscriptions.push(
         vscode.window.registerWebviewViewProvider(
             ChatViewProvider.viewType,

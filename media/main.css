@@ -181,6 +181,14 @@ body {
     background: rgba(255,255,255,0.08);
 }
 
+.code-action-btn.run {
+    color: var(--success);
+}
+
+.code-action-btn.run:hover {
+    background: rgba(78, 201, 176, 0.15);
+}
+
 .step-content pre code {
     display: block;
     padding: 10px 12px;
@@ -188,6 +196,28 @@ body {
     font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
+}
+
+/* Line Numbers */
+pre.has-line-numbers code {
+    padding-left: 0;
+}
+
+pre.has-line-numbers .line-num {
+    display: inline-block;
+    width: 32px;
+    text-align: right;
+    padding-right: 10px;
+    margin-right: 10px;
+    color: var(--text-muted);
+    border-right: 1px solid var(--border);
+    user-select: none;
+    font-size: 10px;
+    opacity: 0.6;
+}
+
+pre.has-line-numbers .line-num::after {
+    content: '';
 }
 
 .step-content code {
@@ -666,7 +696,35 @@ body {
 .welcome-desc {
     font-size: 12px;
     color: var(--text-desc);
+    margin-bottom: 12px;
+}
+
+.welcome-features {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
     margin-bottom: 16px;
+}
+
+.feature-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    padding: 3px 8px;
+    background: var(--bg-input);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.feature-hint kbd {
+    background: rgba(255,255,255,0.06);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 10px;
+    font-family: var(--font-mono);
+    color: var(--accent);
 }
 
 .conversation-starters {
@@ -783,4 +841,287 @@ body {
 .cancel-btn:hover {
     color: var(--error);
     border-color: var(--error);
+}
+
+/* ═══════════════════════════════════════
+   @File Autocomplete Dropdown
+   ═══════════════════════════════════════ */
+
+.file-dropdown, .slash-dropdown {
+    display: none;
+    position: relative;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    max-height: 200px;
+    overflow-y: auto;
+    margin: 0 8px;
+    z-index: 10;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+.file-dropdown-item, .slash-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.1s ease;
+}
+
+.file-dropdown-item:hover, .file-dropdown-item.active,
+.slash-dropdown-item:hover, .slash-dropdown-item.active {
+    background: var(--bg-hover);
+}
+
+.file-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 16px;
+    border-radius: 3px;
+    background: var(--accent);
+    color: var(--accent-text);
+    font-size: 9px;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+
+.file-path {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+.file-size {
+    font-size: 10px;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    flex-shrink: 0;
+}
+
+.slash-cmd {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--accent);
+    font-size: 12px;
+}
+
+.slash-desc {
+    font-size: 11px;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
+   Syntax Highlighting Tokens
+   ═══════════════════════════════════════ */
+
+.syn-keyword { color: #569cd6; }
+.syn-string { color: #ce9178; }
+.syn-number { color: #b5cea8; }
+.syn-comment { color: #6a9955; font-style: italic; }
+.syn-type { color: #4ec9b0; }
+.syn-func { color: #dcdcaa; }
+.syn-literal { color: #569cd6; }
+.syn-tag { color: #569cd6; }
+.syn-attr { color: #9cdcfe; }
+
+/* ═══════════════════════════════════════
+   Inline Editor
+   ═══════════════════════════════════════ */
+
+.inline-editor {
+    margin: 8px 0;
+    border: 1px solid var(--border-focus);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-input);
+}
+
+.inline-editor-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--border);
+}
+
+.inline-file-path {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.inline-editor-textarea {
+    width: 100%;
+    background: transparent;
+    color: var(--text);
+    border: none;
+    padding: 10px 12px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 80px;
+    max-height: 400px;
+    outline: none;
+}
+
+.inline-editor-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    padding: 6px 8px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.1);
+}
+
+.inline-btn {
+    padding: 3px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: 500;
+    transition: all 0.15s ease;
+    font-family: var(--font);
+    background: transparent;
+    color: var(--text-desc);
+}
+
+.inline-btn:hover { color: var(--text); border-color: var(--text-desc); }
+.inline-btn.apply { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+.inline-btn.apply:hover { background: var(--accent-hover); }
+.inline-btn.cancel:hover { color: var(--error); border-color: var(--error); }
+
+.inline-diff-badge {
+    font-size: 10px;
+    font-family: var(--font-mono);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.inline-diff-badge.add { color: var(--success); background: rgba(78, 201, 176, 0.1); }
+.inline-diff-badge.del { color: var(--error); background: rgba(244, 71, 71, 0.1); }
+.inline-diff-badge.mod { color: var(--warning); background: rgba(215, 186, 125, 0.1); }
+
+/* ═══════════════════════════════════════
+   Terminal Result
+   ═══════════════════════════════════════ */
+
+.terminal-result {
+    margin: 4px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--bg-input);
+}
+
+.terminal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: rgba(0,0,0,0.2);
+    border-bottom: 1px solid var(--border);
+}
+
+.terminal-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.terminal-cmd {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--success);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 200px;
+}
+
+.terminal-exit {
+    font-size: 10px;
+    font-family: var(--font-mono);
+}
+
+.terminal-exit.success { color: var(--success); }
+.terminal-exit.error { color: var(--error); }
+
+.terminal-body {
+    max-height: 200px;
+    overflow-y: auto;
+    padding: 6px 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+.terminal-stdout { color: var(--text); }
+.terminal-stderr { color: var(--error); }
+
+/* ═══════════════════════════════════════
+   Session List
+   ═══════════════════════════════════════ */
+
+.session-list {
+    display: none;
+    background: var(--bg-input);
+    border-bottom: 1px solid var(--border);
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.session-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    transition: background 0.1s ease;
+}
+
+.session-item:hover { background: var(--bg-hover); }
+
+.session-preview {
+    font-size: 12px;
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.session-meta {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════
+   @File mention highlight in user messages
+   ═══════════════════════════════════════ */
+
+.step.user .step-content .at-mention {
+    color: var(--accent);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: rgba(14, 99, 156, 0.15);
+    padding: 1px 4px;
+    border-radius: 3px;
 }

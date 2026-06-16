@@ -1,10 +1,19 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as cp from 'child_process';
 import { DifyClient } from './difyClient';
 import { FileSystemProvider } from './fileSystem';
 import { ModeManager, AgentMode } from './modeManager';
 import { ToolExecutor, ToolCall, ToolResult } from './toolExecutor';
 import { DecorationManager } from './decorationManager';
 import { diffToHtml, FileDiff } from './diffEngine';
+
+interface ChatSession {
+    id: string;
+    messages: { role: string; text: string; ts: number }[];
+    mode: AgentMode;
+    createdAt: number;
+}
 
 export class ChatViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'difyChatView';
@@ -13,21 +22,26 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _fs: FileSystemProvider;
     private _modeManager: ModeManager;
     private _toolExecutor: ToolExecutor;
-
     private _decorationManager: DecorationManager;
+    private _extensionContext: vscode.ExtensionContext;
+    private _chatHistory: { role: string; text: string; ts: number }[] = [];
+    private _slashCommands: Map<string, { description: string; handler: (args: string) => Promise<string> }> = new Map();
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
         client: DifyClient,
         fs: FileSystemProvider,
         modeManager: ModeManager,
-        decorationManager: DecorationManager
+        decorationManager: DecorationManager,
+        extensionContext?: vscode.ExtensionContext
     ) {
         this._client = client;
         this._fs = fs;
         this._modeManager = modeManager;
         this._decorationManager = decorationManager;
         this._toolExecutor = new ToolExecutor(fs, modeManager, decorationManager);
+        this._extensionContext = extensionContext!;
+        this._registerSlashCommands();
     }
 
     public resolveWebviewView(
@@ -51,6 +65,8 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'clearChat':
                     this._client.resetConversation();
+                    this._chatHistory = [];
+                    this._currentSessionId = '';
                     this._postMessage({ command: 'clearChat' });
                     break;
                 case 'setMode':
@@ -80,6 +96,27 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'insertPrompt':
                     this._postMessage({ command: 'fillInput', text: message.text });
                     break;
+                case 'searchFiles':
+                    await this._handleSearchFiles(message.query || '');
+                    break;
+                case 'executeTerminal':
+                    await this._handleTerminalCommand(message.command_text || '');
+                    break;
+                case 'slashCommand':
+                    await this._handleSlashCommand(message.text || '');
+                    break;
+                case 'applyInlineEdit':
+                    await this._handleApplyInlineEdit(message.filePath, message.newContent);
+                    break;
+                case 'loadHistory':
+                    this._sendHistory();
+                    break;
+                case 'loadSession':
+                    this._loadSession(message.sessionId);
+                    break;
+                case 'deleteSession':
+                    this._deleteSession(message.sessionId);
+                    break;
             }
         });
 
@@ -87,6 +124,13 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             if (webviewView.visible) {
                 this._postMessage({ command: 'focusInput' });
                 this._sendContextPills();
+                // 发送斜杠命令列表
+                const cmds = Array.from(this._slashCommands.entries()).map(([name, cmd]) => ({
+                    name, description: cmd.description
+                }));
+                this._postMessage({ command: 'slashCommandsList', commands: cmds });
+                // 恢复历史
+                this._sendHistory();
             }
         });
     }
@@ -104,10 +148,41 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     /**
      * 处理用户消息 — 核心 Agent 循环（流式输出）
      */
+    /**
+     * 处理 @文件引用 — 将 @path 替换为文件内容
+     */
+    private async _resolveFileReferences(text: string): Promise<string> {
+        const fileRefRegex = /@(\S+)/g;
+        let match;
+        let resolved = text;
+        const refs: { placeholder: string; filePath: string }[] = [];
+
+        while ((match = fileRefRegex.exec(text)) !== null) {
+            refs.push({ placeholder: match[0], filePath: match[1] });
+        }
+
+        for (const ref of refs) {
+            const file = await this._fs.readFile(ref.filePath);
+            if (file) {
+                const lines = file.content.split('\n').slice(0, 100).join('\n');
+                const truncated = file.lineCount > 100;
+                resolved = resolved.replace(
+                    ref.placeholder,
+                    `\`\`\`${file.language} (${ref.filePath}, ${file.lineCount} lines)\n${lines}${truncated ? '\n... (truncated)' : ''}\n\`\`\``
+                );
+            }
+        }
+        return resolved;
+    }
+
     private async _handleMessage(text: string): Promise<void> {
         this._postMessage({ command: 'startThinking' });
+        this._saveMessage('user', text);
 
         try {
+            // 解析 @文件引用
+            const resolvedText = await this._resolveFileReferences(text);
+
             // 构建上下文
             const context = await this._buildContext();
 
@@ -119,7 +194,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             let streamStarted = false;
 
             const response = await this._client.chatStream(
-                context ? `${context}\n\n---\n\n${text}` : text,
+                context ? `${context}\n\n---\n\n${resolvedText}` : resolvedText,
                 (chunk: string) => {
                     if (!streamStarted) {
                         // 第一个 chunk 到达，通知 webview 开始流式渲染
@@ -135,6 +210,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // 流式结束
             if (streamStarted) {
                 this._postMessage({ command: 'endStream' });
+                this._saveMessage('assistant', fullAnswer);
             }
 
             // 解析工具调用
@@ -164,6 +240,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             } else if (!streamStarted) {
                 // 没有流式输出也没有工具调用，显示完整回复
                 this._postMessage({ command: 'receiveMessage', text: fullAnswer, role: 'assistant' });
+                this._saveMessage('assistant', fullAnswer);
             }
         } catch (error: any) {
             this._postMessage({ command: 'receiveMessage', text: 'Error: ' + error.message, role: 'error' });
@@ -294,6 +371,280 @@ ${modeSuffix}`;
         }
     }
 
+    /**
+     * @文件引用 — 搜索工作区文件
+     */
+    private async _handleSearchFiles(query: string): Promise<void> {
+        const files = await this._fs.scanWorkspace(200);
+        const q = query.toLowerCase();
+        const matches = files
+            .filter(f => f.relativePath.toLowerCase().includes(q))
+            .sort((a, b) => {
+                // Score: prefix match > contains > depth
+                const aPath = a.relativePath.toLowerCase();
+                const bPath = b.relativePath.toLowerCase();
+                const aPrefix = aPath.startsWith(q) ? 0 : 1;
+                const bPrefix = bPath.startsWith(q) ? 0 : 1;
+                if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+                return aPath.length - bPath.length;
+            })
+            .slice(0, 15)
+            .map(f => ({
+                path: f.relativePath,
+                language: f.language,
+                icon: this._getLanguageIcon(f.language),
+                size: f.size
+            }));
+        this._postMessage({ command: 'fileSearchResults', results: matches });
+    }
+
+    private _getLanguageIcon(lang: string): string {
+        const icons: Record<string, string> = {
+            typescript: 'TS', javascript: 'JS', python: 'PY',
+            rust: 'RS', go: 'GO', java: 'JA', html: 'HT',
+            css: 'CS', json: 'JS', yaml: 'YM', markdown: 'MD',
+            shell: 'SH', sql: 'SQ', vue: 'VU'
+        };
+        return icons[lang] || lang.slice(0, 2).toUpperCase();
+    }
+
+    /**
+     * 终端命令执行
+     */
+    private async _handleTerminalCommand(cmd: string): Promise<void> {
+        const root = this._fs.getWorkspaceRoot();
+        try {
+            const result = await new Promise<{ stdout: string; stderr: string; code: number }>((resolve) => {
+                cp.exec(cmd, { cwd: root, timeout: 30000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+                    resolve({
+                        stdout: stdout || '',
+                        stderr: stderr || '',
+                        code: error ? (error as any).code || 1 : 0
+                    });
+                });
+            });
+            this._postMessage({
+                command: 'terminalResult',
+                stdout: result.stdout,
+                stderr: result.stderr,
+                code: result.code
+            });
+        } catch (err: any) {
+            this._postMessage({ command: 'terminalResult', stdout: '', stderr: err.message, code: 1 });
+        }
+    }
+
+    /**
+     * 斜杠命令系统
+     */
+    private _registerSlashCommands(): void {
+        this._slashCommands.set('explain', {
+            description: '解释选中的代码',
+            handler: async (args) => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) return '请先打开一个文件';
+                const text = editor.document.getText(editor.selection) || editor.document.getText();
+                return `请解释以下代码:\n\`\`\`${editor.document.languageId}\n${text}\n\`\`\``;
+            }
+        });
+        this._slashCommands.set('fix', {
+            description: '修复代码问题',
+            handler: async (args) => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) return '请先打开一个文件';
+                const text = editor.document.getText(editor.selection) || editor.document.getText();
+                return `请找出并修复以下代码的问题:\n\`\`\`${editor.document.languageId}\n${text}\n\`\`\``;
+            }
+        });
+        this._slashCommands.set('refactor', {
+            description: '重构代码',
+            handler: async (args) => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) return '请先打开一个文件';
+                const text = editor.document.getText(editor.selection) || editor.document.getText();
+                return `请重构以下代码，提升可读性和性能:\n\`\`\`${editor.document.languageId}\n${text}\n\`\`\``;
+            }
+        });
+        this._slashCommands.set('test', {
+            description: '生成单元测试',
+            handler: async (args) => {
+                const editor = vscode.window.activeTextEditor;
+                if (!editor) return '请先打开一个文件';
+                const text = editor.document.getText(editor.selection) || editor.document.getText();
+                return `请为以下代码生成单元测试:\n\`\`\`${editor.document.languageId}\n${text}\n\`\`\``;
+            }
+        });
+        this._slashCommands.set('clear', {
+            description: '清空对话',
+            handler: async () => {
+                this._client.resetConversation();
+                this._chatHistory = [];
+                this._postMessage({ command: 'clearChat' });
+                return '';
+            }
+        });
+        this._slashCommands.set('terminal', {
+            description: '执行终端命令',
+            handler: async (args) => {
+                if (!args.trim()) return '用法: /terminal <命令>';
+                this._postMessage({ command: 'runTerminal', commandText: args.trim() });
+                return '';
+            }
+        });
+        this._slashCommands.set('help', {
+            description: '显示所有可用命令',
+            handler: async () => {
+                const lines = Array.from(this._slashCommands.entries())
+                    .map(([name, cmd]) => `/${name} — ${cmd.description}`)
+                    .join('\n');
+                this._postMessage({ command: 'receiveMessage', text: '**可用斜杠命令:**\n\n' + lines, role: 'assistant' });
+                return '';
+            }
+        });
+        this._slashCommands.set('file', {
+            description: '读取文件内容',
+            handler: async (args) => {
+                if (!args.trim()) return '用法: /file <路径>';
+                const file = await this._fs.readFile(args.trim());
+                if (!file) return `文件未找到: ${args}`;
+                return `请分析文件 ${file.relativePath}:\n\`\`\`${file.language}\n${file.content}\n\`\`\``;
+            }
+        });
+        this._slashCommands.set('mode', {
+            description: '切换模式 (ask/plan/agent)',
+            handler: async (args) => {
+                const mode = args.trim().toLowerCase() as AgentMode;
+                if (!['ask', 'plan', 'agent'].includes(mode)) {
+                    this._postMessage({ command: 'receiveMessage', text: '用法: /mode <ask|plan|agent>', role: 'assistant' });
+                    return '';
+                }
+                this._modeManager.setMode(mode);
+                this._postMessage({ command: 'modeChanged', mode });
+                this._postMessage({ command: 'receiveMessage', text: `已切换到 ${mode} 模式`, role: 'system' });
+                return '';
+            }
+        });
+        this._slashCommands.set('compact', {
+            description: '压缩对话上下文',
+            handler: async () => {
+                const history = this._client.getMessageHistory();
+                const summary = history.slice(-6).map(m => `${m.role}: ${m.content.slice(0, 100)}`).join('\n');
+                this._client.resetConversation();
+                return `之前的对话摘要:\n${summary}\n请继续。`;
+            }
+        });
+    }
+
+    private async _handleSlashCommand(text: string): Promise<void> {
+        const match = text.match(/^\/(\w+)\s*(.*)/);
+        if (!match) return;
+        const [, cmd, args] = match;
+        const slashCmd = this._slashCommands.get(cmd);
+        if (!slashCmd) {
+            this._postMessage({ command: 'receiveMessage', text: `未知命令: /${cmd}\n可用命令: ${Array.from(this._slashCommands.keys()).map(k => '/' + k).join(', ')}`, role: 'error' });
+            return;
+        }
+        const result = await slashCmd.handler(args);
+        if (result) {
+            await this._handleMessage(result);
+        }
+    }
+
+    /**
+     * 内联编辑
+     */
+    private _loadSession(sessionId: string): void {
+        if (!this._extensionContext) return;
+        const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+        const session = sessions[sessionId];
+        if (!session) return;
+        this._currentSessionId = session.id;
+        this._chatHistory = session.messages;
+        this._client.resetConversation();
+        this._postMessage({ command: 'clearChat' });
+        this._postMessage({ command: 'restoreHistory', messages: session.messages });
+    }
+
+    private _deleteSession(sessionId: string): void {
+        if (!this._extensionContext) return;
+        const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+        delete sessions[sessionId];
+        this._extensionContext.globalState.update('difyChatSessions', sessions);
+        if (this._currentSessionId === sessionId) {
+            this._currentSessionId = '';
+            this._chatHistory = [];
+        }
+        this._sendSessionList();
+    }
+
+    private async _handleApplyInlineEdit(filePath: string, newContent: string): Promise<void> {
+        const success = await this._fs.writeFile(filePath, newContent);
+        if (success) {
+            const root = this._fs.getWorkspaceRoot();
+            if (root) {
+                const uri = vscode.Uri.joinPath(vscode.Uri.file(root), filePath);
+                await vscode.window.showTextDocument(uri);
+            }
+            this._postMessage({ command: 'inlineEditApplied', filePath });
+        } else {
+            this._postMessage({ command: 'receiveMessage', text: `写入失败: ${filePath}`, role: 'error' });
+        }
+    }
+
+    /**
+     * 历史记录
+     */
+    private _currentSessionId: string = '';
+
+    private _saveMessage(role: string, text: string): void {
+        this._chatHistory.push({ role, text, ts: Date.now() });
+        if (this._extensionContext) {
+            const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+            if (!this._currentSessionId) {
+                this._currentSessionId = 'session_' + Date.now();
+            }
+            sessions[this._currentSessionId] = {
+                id: this._currentSessionId,
+                messages: this._chatHistory,
+                mode: this._modeManager.getMode(),
+                createdAt: sessions[this._currentSessionId]?.createdAt || Date.now()
+            };
+            this._extensionContext.globalState.update('difyChatSessions', sessions);
+            this._sendSessionList();
+        }
+    }
+
+    private _sendHistory(): void {
+        if (this._extensionContext) {
+            const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+            this._sendSessionList();
+            const sessionIds = Object.keys(sessions).sort((a, b) => {
+                return (sessions[b].createdAt || 0) - (sessions[a].createdAt || 0);
+            });
+            if (sessionIds.length > 0) {
+                const latest = sessions[sessionIds[0]];
+                this._currentSessionId = latest.id;
+                this._chatHistory = latest.messages;
+                this._postMessage({ command: 'restoreHistory', messages: latest.messages });
+            }
+        }
+    }
+
+    private _sendSessionList(): void {
+        if (!this._extensionContext) return;
+        const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+        const list = Object.values(sessions)
+            .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+            .slice(0, 20)
+            .map(s => ({
+                id: s.id,
+                preview: s.messages.length > 0 ? s.messages[0].text.slice(0, 60) : '(empty)',
+                messageCount: s.messages.length,
+                createdAt: s.createdAt
+            }));
+        this._postMessage({ command: 'sessionList', sessions: list });
+    }
+
     private async _insertCode(code: string): Promise<void> {
         const editor = vscode.window.activeTextEditor;
         if (editor) {
@@ -324,6 +675,12 @@ ${modeSuffix}`;
             <div class="welcome" id="welcome">
                 <div class="welcome-title">Dify Code Assistant</div>
                 <div class="welcome-desc">Ask questions, plan tasks, or let the agent write code.</div>
+                <div class="welcome-features">
+                    <div class="feature-hint"><kbd>@</kbd> Reference files</div>
+                    <div class="feature-hint"><kbd>/</kbd> Slash commands</div>
+                    <div class="feature-hint"><kbd>Ctrl+.</kbd> Switch mode</div>
+                    <div class="feature-hint"><kbd>Esc</kbd> Cancel stream</div>
+                </div>
                 <div class="conversation-starters">
                     <button class="starter-btn" data-prompt="Explain this code">
                         <div>
@@ -371,6 +728,12 @@ ${modeSuffix}`;
                     <button class="mode-btn" data-mode="agent">Agent</button>
                 </div>
                 <div class="toolbar-right">
+                    <button class="icon-btn" id="historyBtn" title="History">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="8" cy="8" r="6"/>
+                            <path d="M8 4v4l3 2"/>
+                        </svg>
+                    </button>
                     <button class="icon-btn" id="clearBtn" title="New Chat">
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                             <path d="M2 2h12M5 2V1h6v1M3 2v11a1 1 0 001 1h8a1 1 0 001-1V2"/>
@@ -388,9 +751,15 @@ ${modeSuffix}`;
             <!-- Context Tags -->
             <div class="context-tags" id="inputContext"></div>
 
+            <!-- @File Autocomplete Dropdown -->
+            <div class="file-dropdown" id="fileDropdown"></div>
+
+            <!-- Slash Command Dropdown -->
+            <div class="slash-dropdown" id="slashDropdown"></div>
+
             <!-- Input Row -->
             <div class="input-row">
-                <textarea id="userInput" placeholder="Ask anything..." rows="1"></textarea>
+                <textarea id="userInput" placeholder="Ask anything... (type @ for files, / for commands)" rows="1"></textarea>
                 <button id="sendBtn" title="Send (Enter)">
                     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
                         <path d="M14 2L7 9M14 2l-5 12-3-7-7-3 12-5z"/>
