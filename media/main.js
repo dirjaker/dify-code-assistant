@@ -384,9 +384,11 @@
     var streamingStep = null;
     var streamingContent = null;
     var streamBuffer = '';
+    var userScrolledUp = false;
 
     function startStream() {
         welcomeEl.style.display = 'none';
+        userScrolledUp = false;
 
         streamingStep = document.createElement('div');
         streamingStep.className = 'step assistant';
@@ -402,13 +404,23 @@
     function appendStreamChunk(chunk) {
         if (!streamingContent) return;
         streamBuffer += chunk;
-        streamingContent.innerHTML = renderMarkdown(streamBuffer);
-        addCodeActions(streamingContent);
-        stepsArea.scrollTop = stepsArea.scrollHeight;
+
+        // 优化：检测是否在代码块内，如果是则只更新代码块内容
+        var rendered = renderStreamingMarkdown(streamBuffer);
+        streamingContent.innerHTML = rendered;
+
+        // 只在用户没有手动滚动时自动滚到底部
+        if (!userScrolledUp) {
+            stepsArea.scrollTop = stepsArea.scrollHeight;
+        }
     }
 
     function endStream() {
         if (streamingStep) {
+            // 最终渲染一次完整 markdown
+            streamingContent.innerHTML = renderMarkdown(streamBuffer);
+            addCodeActions(streamingContent);
+
             // 添加 response actions
             var actions = document.createElement('div');
             actions.className = 'response-actions';
@@ -423,7 +435,47 @@
         streamingStep = null;
         streamingContent = null;
         streamBuffer = '';
+        userScrolledUp = false;
     }
+
+    /**
+     * 流式 Markdown 渲染 — 处理未闭合的代码块
+     */
+    function renderStreamingMarkdown(text) {
+        var html = text;
+
+        // 处理未闭合的代码块（流式输出时常见）
+        var codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
+        var lastCodeBlockEnd = 0;
+        var match;
+
+        while ((match = codeBlockRegex.exec(html)) !== null) {
+            lastCodeBlockEnd = match.index + match[0].length;
+        }
+
+        // 如果有未闭合的代码块，手动闭合它
+        var openBlockStart = html.lastIndexOf('```', lastCodeBlockEnd > 0 ? lastCodeBlockEnd : 0);
+        if (openBlockStart > lastCodeBlockEnd - 10 || (lastCodeBlockEnd === 0 && html.includes('```'))) {
+            // 检查是否有未闭合的代码块
+            var afterLastClose = html.substring(lastCodeBlockEnd);
+            if (afterLastClose.includes('```') || (lastCodeBlockEnd === 0 && html.indexOf('```') !== -1)) {
+                // 有未闭合的代码块，手动闭合
+                var parts = html.split('```');
+                if (parts.length % 2 === 0) {
+                    // 奇数个 ``` 表示有未闭合的代码块
+                    html += '\n```';
+                }
+            }
+        }
+
+        return renderMarkdown(html);
+    }
+
+    // 监听用户滚动，判断是否手动滚动上去
+    stepsArea.addEventListener('scroll', function() {
+        var isAtBottom = stepsArea.scrollHeight - stepsArea.scrollTop - stepsArea.clientHeight < 50;
+        userScrolledUp = !isAtBottom && streamingStep !== null;
+    });
 
     // ═══════════════════════════════════════
 
