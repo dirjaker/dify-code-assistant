@@ -1,10 +1,6 @@
 # Dify Code Assistant
 
 <p align="center">
-  <img src="assets/banner.svg" alt="Dify Code Assistant" width="100%">
-</p>
-
-<p align="center">
   <strong>基于 Dify 的 VS Code AI 编程助手</strong>
 </p>
 
