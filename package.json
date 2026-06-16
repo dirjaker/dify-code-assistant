@@ -2,7 +2,7 @@
   "name": "dify-code-assistant",
   "displayName": "Dify Code Assistant",
   "description": "基于 Dify 的 VS Code AI 编程助手，支持智能对话、代码补全、代码解释和重构",
-  "version": "0.2.4",
+  "version": "1.0.0",
   "publisher": "dirjaker",
   "engines": {
     "vscode": "^1.85.0"
@@ -72,12 +72,12 @@
       "properties": {
         "dify.apiUrl": {
           "type": "string",
-          "default": "http://192.168.31.100:9000",
+          "default": "http://localhost:9000",
           "description": "Dify API 地址"
         },
         "dify.apiKey": {
           "type": "string",
-          "default": "REDACTED_DIFY_KEY",
+          "default": "",
           "description": "Dify API Key (app-xxx)"
         },
         "dify.model": {
