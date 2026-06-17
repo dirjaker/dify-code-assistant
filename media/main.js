@@ -117,24 +117,22 @@
         if (mode === currentMode) return;
         currentMode = mode;
 
-        // Only toggle the two buttons that change (not all 3)
+        // Batch all DOM reads/writes to prevent layout thrashing
+        // 1. Toggle button classes
         var prev = document.querySelector('.mode-btn.active');
         var next = document.querySelector('.mode-btn[data-mode="' + mode + '"]');
+
+        // 2. Prepare text updates
+        var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
+        var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
+
+        // 3. Single batched write — all DOM changes in one frame
         if (prev && prev !== next) prev.classList.remove('active');
         if (next) next.classList.add('active');
+        inputEl.placeholder = placeholders[mode] || 'Ask anything...';
+        if (modeLabelEl) modeLabelEl.textContent = labels[mode] || '';
 
         vscode.postMessage({ command: 'setMode', mode: mode });
-
-        // Defer non-visual updates to avoid blocking
-        requestAnimationFrame(function() {
-            var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
-            inputEl.placeholder = placeholders[mode] || 'Ask anything...';
-
-            if (modeLabelEl) {
-                var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
-                modeLabelEl.textContent = labels[mode] || '';
-            }
-        });
     }
 
     document.querySelectorAll('.mode-btn').forEach(function(btn) {
