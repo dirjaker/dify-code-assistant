@@ -12,9 +12,58 @@
     const settingsBtnEl = document.getElementById('settingsBtn');
     const contextArea = document.getElementById('inputContext');
     const modeLabelEl = document.getElementById('modeLabel');
+    const tabListEl = document.getElementById('tabList');
+    const tabNewBtn = document.getElementById('tabNewBtn');
 
     var currentMode = 'ask';
     const modes = ['ask', 'plan', 'agent'];
+
+    // ═══════════════════════════════════════
+    // Tab Management
+    // ═══════════════════════════════════════
+    var tabs = []; // { id, title, active }
+    var activeTabId = null;
+
+    function renderTabs() {
+        if (!tabListEl) return;
+        tabListEl.innerHTML = '';
+        tabs.forEach(function(tab) {
+            var el = document.createElement('div');
+            el.className = 'tab-item' + (tab.id === activeTabId ? ' active' : '');
+            el.setAttribute('data-tab-id', tab.id);
+
+            var title = document.createElement('span');
+            title.className = 'tab-title';
+            title.textContent = tab.title || 'New Chat';
+            title.title = tab.title || 'New Chat';
+
+            var close = document.createElement('button');
+            close.className = 'tab-close';
+            close.innerHTML = '&#10005;';
+            close.title = 'Close';
+            close.addEventListener('click', function(e) {
+                e.stopPropagation();
+                vscode.postMessage({ command: 'closeTab', tabId: tab.id });
+            });
+
+            el.appendChild(title);
+            el.appendChild(close);
+
+            el.addEventListener('click', function() {
+                if (tab.id !== activeTabId) {
+                    vscode.postMessage({ command: 'switchTab', tabId: tab.id });
+                }
+            });
+
+            tabListEl.appendChild(el);
+        });
+    }
+
+    if (tabNewBtn) {
+        tabNewBtn.addEventListener('click', function() {
+            vscode.postMessage({ command: 'newTab' });
+        });
+    }
 
     // ═══════════════════════════════════════
     // @File Autocomplete State
@@ -460,6 +509,13 @@
     function showTerminalResult(stdout, stderr, exitCode) {
         var step = document.createElement('div');
         step.className = 'step assistant';
+
+        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Terminal';
+        step.appendChild(label);
+
         var content = document.createElement('div');
         content.className = 'step-content';
         var result = document.createElement('div');
@@ -665,6 +721,12 @@
         var step = document.createElement('div');
         step.className = 'step ' + role;
 
+        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = role === 'user' ? 'You' : 'Assistant';
+        step.appendChild(label);
+
         // Step Content
         var content = document.createElement('div');
         content.className = 'step-content';
@@ -807,6 +869,12 @@
         var step = document.createElement('div');
         step.className = 'step assistant';
 
+        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Diff';
+        step.appendChild(label);
+
         var content = document.createElement('div');
         content.className = 'step-content';
 
@@ -869,6 +937,12 @@
     function showToolResult(type, data) {
         var div = document.createElement('div');
         div.className = 'step assistant';
+
+        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = type === 'read_file' ? 'File Read' : type;
+        div.appendChild(label);
 
         var content = document.createElement('div');
         content.className = 'step-content';
@@ -973,6 +1047,12 @@
 
         streamingStep = document.createElement('div');
         streamingStep.className = 'step assistant';
+
+        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Assistant';
+        streamingStep.appendChild(label);
 
         streamingContent = document.createElement('div');
         streamingContent.className = 'step-content streaming';
@@ -1153,6 +1233,10 @@
             case 'diffApplied':
                 var appliedStep = document.createElement('div');
                 appliedStep.className = 'step assistant';
+                var appliedLabel = document.createElement('div');
+                appliedLabel.className = 'step-label';
+                appliedLabel.textContent = 'Applied';
+                appliedStep.appendChild(appliedLabel);
                 var appliedContent = document.createElement('div');
                 appliedContent.className = 'step-content';
                 appliedContent.innerHTML = '<div class="tool-result"><div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved. Changes highlighted in editor.</div></div>';
@@ -1198,6 +1282,10 @@
             case 'inlineEditApplied':
                 var appliedStep2 = document.createElement('div');
                 appliedStep2.className = 'step assistant';
+                var appliedLabel2 = document.createElement('div');
+                appliedLabel2.className = 'step-label';
+                appliedLabel2.textContent = 'Edit Applied';
+                appliedStep2.appendChild(appliedLabel2);
                 var appliedContent2 = document.createElement('div');
                 appliedContent2.className = 'step-content';
                 appliedContent2.innerHTML = '<div class="tool-result"><div class="tool-result-header" style="color:var(--success)">Inline Edit Applied</div><div class="tool-result-body">' + escapeHtml(msg.filePath) + ' has been updated.</div></div>';
@@ -1210,6 +1298,11 @@
                 break;
             case 'sessionList':
                 updateSessionList(msg.sessions || []);
+                break;
+            case 'tabUpdate':
+                tabs = msg.tabs || [];
+                activeTabId = msg.activeTabId || null;
+                renderTabs();
                 break;
         }
     });
@@ -1237,12 +1330,27 @@
             item.className = 'session-item';
             var date = new Date(s.createdAt);
             var timeStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-            item.innerHTML = '<span class="session-preview">' + escapeHtml(s.preview) + '</span>' +
+
+            var info = document.createElement('div');
+            info.className = 'session-info';
+            info.innerHTML = '<span class="session-preview">' + escapeHtml(s.preview) + '</span>' +
                 '<span class="session-meta">' + s.messageCount + ' msgs · ' + timeStr + '</span>';
-            item.addEventListener('click', function() {
+            info.addEventListener('click', function() {
                 vscode.postMessage({ command: 'loadSession', sessionId: s.id });
                 sessionListEl.style.display = 'none';
             });
+
+            var delBtn = document.createElement('button');
+            delBtn.className = 'session-delete';
+            delBtn.title = 'Delete';
+            delBtn.innerHTML = '&#10005;';
+            delBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                vscode.postMessage({ command: 'deleteSession', sessionId: s.id });
+            });
+
+            item.appendChild(info);
+            item.appendChild(delBtn);
             sessionListEl.appendChild(item);
         });
     }

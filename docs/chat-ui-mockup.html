@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Chat UI 方案对比</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1e1e1e; 
+    color: #cccccc;
+    padding: 20px;
+}
+h1 { color: #fff; text-align: center; margin-bottom: 30px; font-size: 20px; }
+.container { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+方案 {
+    width: 340px;
+    background: #252526;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid #333;
+}
+方案标题 {
+    display: block;
+    background: #333;
+    color: #fff;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 600;
+}
+.chat-area {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 400px;
+}
+
+/* ============ 方案A: 当前风格增强 ============ */
+.style-a .msg {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    line-height: 1.6;
+    position: relative;
+}
+.style-a .msg.user {
+    background: #0078d4;
+    color: #fff;
+    align-self: flex-end;
+    max-width: 85%;
+    border-radius: 8px 8px 2px 8px;
+}
+.style-a .msg.assistant {
+    background: #2d2d2d;
+    color: #ccc;
+    align-self: flex-start;
+    max-width: 90%;
+    border-radius: 8px 8px 8px 2px;
+    border: 1px solid #3e3e3e;
+}
+.style-a .msg-label {
+    font-size: 10px;
+    opacity: 0.6;
+    margin-bottom: 4px;
+}
+.style-a .msg.user .msg-label { text-align: right; color: rgba(255,255,255,0.7); }
+.style-a .msg.assistant .msg-label { color: #888; }
+
+/* ============ 方案B: 气泡+头像 ============ */
+.style-b .msg-row {
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+}
+.style-b .msg-row.user { flex-direction: row-reverse; }
+.style-b .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+.style-b .msg-row.user .avatar { background: #0078d4; }
+.style-b .msg-row.assistant .avatar { background: #3e3e3e; }
+.style-b .bubble {
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 80%;
+}
+.style-b .msg-row.user .bubble {
+    background: #0078d4;
+    color: #fff;
+    border-radius: 10px 10px 2px 10px;
+}
+.style-b .msg-row.assistant .bubble {
+    background: #2d2d2d;
+    color: #ccc;
+    border: 1px solid #3e3e3e;
+    border-radius: 10px 10px 10px 2px;
+}
+
+/* ============ 方案C: 标签+分隔线 ============ */
+.style-c .msg {
+    position: relative;
+    padding: 12px 16px;
+    font-size: 13px;
+    line-height: 1.6;
+    border-left: 3px solid transparent;
+    margin-left: 8px;
+}
+.style-c .msg.user {
+    background: rgba(0, 120, 212, 0.08);
+    border-left-color: #0078d4;
+    border-radius: 0 6px 6px 0;
+}
+.style-c .msg.assistant {
+    background: rgba(255, 255, 255, 0.03);
+    border-left-color: #666;
+    border-radius: 0 6px 6px 0;
+}
+.style-c .msg-tag {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    margin-bottom: 6px;
+}
+.style-c .msg.user .msg-tag { background: #0078d4; color: #fff; }
+.style-c .msg.assistant .msg-tag { background: #3e3e3e; color: #999; }
+
+/* 代码块 */
+.code-block {
+    background: #1e1e1e;
+    border: 1px solid #3e3e3e;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'Fira Code', monospace;
+    font-size: 12px;
+    margin-top: 8px;
+    overflow-x: auto;
+    color: #d4d4d4;
+}
+.code-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+.code-lang { font-size: 10px; color: #888; }
+.code-actions button {
+    background: #3e3e3e;
+    border: none;
+    color: #ccc;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    cursor: pointer;
+}
+
+/* 输入框 */
+.input-area {
+    padding: 12px 16px;
+    border-top: 1px solid #333;
+}
+.input-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.input-row input {
+    flex: 1;
+    background: #3c3c3c;
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 8px 12px;
+    color: #ccc;
+    font-size: 13px;
+}
+.send-btn {
+    background: #0078d4;
+    border: none;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+}
+</style>
+</head>
+<body>
+<h1>Chat UI 方案对比</h1>
+<div class="container">
+
+<!-- 方案A: 当前风格增强 -->
+<div class="方案 style-a">
+    <span class="方案标题">方案A: 色块区分（简洁）</span>
+    <div class="chat-area">
+        <div class="msg user">
+            <div class="msg-label">You</div>
+            帮我写一个 Python 快速排序
+        </div>
+        <div class="msg assistant">
+            <div class="msg-label">Assistant</div>
+            好的，这是一个快速排序的实现：
+            <div class="code-block">
+                <div class="code-header">
+                    <span class="code-lang">python</span>
+                    <div class="code-actions">
+                        <button>Copy</button>
+                        <button>Insert</button>
+                    </div>
+                </div>
+def quicksort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + middle + quicksort(right)
+            </div>
+        </div>
+        <div class="msg user">
+            <div class="msg-label">You</div>
+            能解释一下 pivot 的选择吗？
+        </div>
+        <div class="msg assistant">
+            <div class="msg-label">Assistant</div>
+            这里选择数组中间的元素作为 pivot。这是一种简单且在大多数情况下表现良好的策略...
+        </div>
+    </div>
+    <div class="input-area">
+        <div class="input-row">
+            <input placeholder="Ask anything..." />
+            <button class="send-btn">&#9654;</button>
+        </div>
+    </div>
+</div>
+
+<!-- 方案B: 气泡+头像 -->
+<div class="方案 style-b">
+    <span class="方案标题">方案B: 气泡+头像（IM风格）</span>
+    <div class="chat-area">
+        <div class="msg-row user">
+            <div class="avatar">Y</div>
+            <div class="bubble">帮我写一个 Python 快速排序</div>
+        </div>
+        <div class="msg-row assistant">
+            <div class="avatar">D</div>
+            <div class="bubble">
+                好的，这是一个快速排序的实现：
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">python</span>
+                        <div class="code-actions">
+                            <button>Copy</button>
+                            <button>Insert</button>
+                        </div>
+                    </div>
+def quicksort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + middle + quicksort(right)
+                </div>
+            </div>
+        </div>
+        <div class="msg-row user">
+            <div class="avatar">Y</div>
+            <div class="bubble">能解释一下 pivot 的选择吗？</div>
+        </div>
+        <div class="msg-row assistant">
+            <div class="avatar">D</div>
+            <div class="bubble">这里选择数组中间的元素作为 pivot。这是一种简单且在大多数情况下表现良好的策略...</div>
+        </div>
+    </div>
+    <div class="input-area">
+        <div class="input-row">
+            <input placeholder="Ask anything..." />
+            <button class="send-btn">&#9654;</button>
+        </div>
+    </div>
+</div>
+
+<!-- 方案C: 标签+分隔线 -->
+<div class="方案 style-c">
+    <span class="方案标题">方案C: 标签+左边线（编辑器风格）</span>
+    <div class="chat-area">
+        <div class="msg user">
+            <div class="msg-tag">You</div>
+            <div>帮我写一个 Python 快速排序</div>
+        </div>
+        <div class="msg assistant">
+            <div class="msg-tag">Assistant</div>
+            <div>好的，这是一个快速排序的实现：
+                <div class="code-block">
+                    <div class="code-header">
+                        <span class="code-lang">python</span>
+                        <div class="code-actions">
+                            <button>Copy</button>
+                            <button>Insert</button>
+                        </div>
+                    </div>
+def quicksort(arr):
+    if len(arr) <= 1:
+        return arr
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+    return quicksort(left) + middle + quicksort(right)
+                </div>
+            </div>
+        </div>
+        <div class="msg user">
+            <div class="msg-tag">You</div>
+            <div>能解释一下 pivot 的选择吗？</div>
+        </div>
+        <div class="msg assistant">
+            <div class="msg-tag">Assistant</div>
+            <div>这里选择数组中间的元素作为 pivot。这是一种简单且在大多数情况下表现良好的策略...</div>
+        </div>
+    </div>
+    <div class="input-area">
+        <div class="input-row">
+            <input placeholder="Ask anything..." />
+            <button class="send-btn">&#9654;</button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<p style="text-align:center; margin-top:30px; color:#666; font-size:12px;">
+    刷新页面对比 | 推荐方案A（简洁，VS Code 原生感）
+</p>
+</body>
+</html>
