@@ -114,19 +114,27 @@
     // ═══════════════════════════════════════
 
     function setMode(mode) {
+        if (mode === currentMode) return;
         currentMode = mode;
-        document.querySelectorAll('.mode-btn').forEach(function(b) {
-            b.classList.toggle('active', b.getAttribute('data-mode') === mode);
-        });
+
+        // Only toggle the two buttons that change (not all 3)
+        var prev = document.querySelector('.mode-btn.active');
+        var next = document.querySelector('.mode-btn[data-mode="' + mode + '"]');
+        if (prev && prev !== next) prev.classList.remove('active');
+        if (next) next.classList.add('active');
+
         vscode.postMessage({ command: 'setMode', mode: mode });
 
-        var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
-        inputEl.placeholder = placeholders[mode] || 'Ask anything...';
+        // Defer non-visual updates to avoid blocking
+        requestAnimationFrame(function() {
+            var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
+            inputEl.placeholder = placeholders[mode] || 'Ask anything...';
 
-        if (modeLabelEl) {
-            var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
-            modeLabelEl.textContent = labels[mode] || '';
-        }
+            if (modeLabelEl) {
+                var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
+                modeLabelEl.textContent = labels[mode] || '';
+            }
+        });
     }
 
     document.querySelectorAll('.mode-btn').forEach(function(btn) {
