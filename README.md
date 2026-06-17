@@ -4,7 +4,7 @@
 
 <br>
 
-### 🤖 基于 Dify 的 VS Code AI 编程助手
+### 基于 Dify 的 VS Code AI 编程助手
 
 [![Stars](https://img.shields.io/github/stars/dirjaker/dify-code-assistant?style=flat-square&label=Stars&color=FFD700)](https://github.com/dirjaker/dify-code-assistant/stargazers)
 [![Forks](https://img.shields.io/github/forks/dirjaker/dify-code-assistant?style=flat-square&label=Forks&color=4A90D9)](https://github.com/dirjaker/dify-code-assistant/network/members)
@@ -17,19 +17,45 @@
 
 ---
 
-## ✨ 功能特性
+## 功能特性
+
+### 核心功能
 
 | 功能 | 描述 |
 |------|------|
-| 💬 **AI 对话** | 侧边栏实时对话，支持 Markdown 渲染和代码高亮 |
-| 📖 **代码解释** | 选中代码，AI 逐行解析逻辑和关键变量 |
-| 🐛 **Bug 修复** | 分析代码问题，定位根因并提供修复方案 |
-| ♻️ **代码重构** | 优化代码结构，提取重复逻辑，提高可读性 |
-| ✨ **代码生成** | 根据自然语言描述生成代码片段 |
-| 🔮 **内联补全** | 基于上下文的智能代码补全建议，500ms 防抖 |
-| 📋 **一键复制** | 代码块快速复制到剪贴板或插入编辑器 |
+| **AI 对话** | 侧边栏实时对话，流式输出，支持 Markdown 渲染和代码高亮 |
+| **三种模式** | Ask（问答）、Plan（规划）、Agent（执行），Ctrl+. 快速切换 |
+| **代码解释** | 选中代码，AI 逐行解析逻辑和关键变量 |
+| **Bug 修复** | 分析代码问题，定位根因并提供修复方案 |
+| **代码重构** | 优化代码结构，提取重复逻辑，提高可读性 |
+| **代码生成** | 根据自然语言描述生成代码片段 |
 
-## 🚀 快速开始
+### 高级功能
+
+| 功能 | 描述 |
+|------|------|
+| **Ghost Text** | Tab 接受内联补全建议，500ms 防抖，智能跳过字符串和注释 |
+| **Inline Chat** | Ctrl+I 在编辑器内直接对话，Insert at Cursor 插入代码 |
+| **@workspace** | 全项目索引（4层深度），检测项目类型、依赖和结构 |
+| **@文件引用** | 输入 @ 触发文件搜索下拉，支持模糊匹配和文件大小显示 |
+| **斜杠命令** | /explain、/fix、/refactor、/test、/clear、/terminal 等快捷命令 |
+| **会话持久化** | 自动保存对话历史，支持多会话管理和切换 |
+| **内联编辑** | Edit 按钮打开编辑器，diff 预览，Apply 写入文件 |
+| **终端执行** | Run 按钮执行 Shell/Python 命令，自动检测语言类型 |
+| **流式输出** | 实时逐 chunk 输出，零频闪，智能滚动（用户上滚不强制拉回） |
+
+### 代码操作
+
+| 操作 | 快捷键 |
+|------|--------|
+| 打开 AI 助手 | `Ctrl+Shift+D` / `Cmd+Shift+D` |
+| 发送消息 | `Enter` |
+| 换行 | `Shift+Enter` |
+| 切换模式 | `Ctrl+.` |
+| 内联对话 | `Ctrl+I` |
+| 取消流式 | `Esc` |
+
+## 快速开始
 
 ### 环境要求
 
@@ -79,7 +105,7 @@ npm run package
 
 Dify 应用配置详见 [Dify 配置指南](docs/dify-guide.md)，也可直接导入预配置 DSL 文件 `dify/vscode-code-assistant.yml`。
 
-## 🛠️ 技术栈
+## 技术栈
 
 | 层级 | 技术 |
 |------|------|
@@ -90,33 +116,21 @@ Dify 应用配置详见 [Dify 配置指南](docs/dify-guide.md)，也可直接�
 | **开发语言** | TypeScript |
 | **构建工具** | tsc + @vscode/vsce |
 
-## 📖 使用方法
-
-### AI 对话
-
-| 操作 | 快捷键 |
-|------|--------|
-| 打开 AI 助手 | `Ctrl+Shift+D` / `Cmd+Shift+D` |
-| 发送消息 | `Enter` |
-| 换行 | `Shift+Enter` |
-
-### 代码操作
-
-1. 在编辑器中选中代码
-2. 右键选择 AI 功能：
-   - **AI: 解释代码** — 详细解释代码逻辑
-   - **AI: 修复代码** — 找出并修复问题
-   - **AI: 重构代码** — 优化代码结构
-   - **AI: 生成代码** — 根据描述生成代码
-
-## 🏗️ 项目结构
+## 项目结构
 
 ```
 dify-code-assistant/
 ├── src/                        # TypeScript 源代码
 │   ├── extension.ts            # 插件入口，注册命令和视图
 │   ├── chatPanel.ts            # 侧边栏 Webview 面板
-│   ├── completionProvider.ts   # 内联代码补全提供者
+│   ├── chatInlineProvider.ts   # Inline Chat provider（Ctrl+I）
+│   ├── completionProvider.ts   # Ghost Text 补全提供者
+│   ├── workspaceIndexer.ts     # @workspace 全项目索引
+│   ├── toolExecutor.ts         # 工具执行器（读写文件、终端）
+│   ├── decorationManager.ts    # 编辑器装饰管理
+│   ├── modeManager.ts          # 模式管理（ask/plan/agent）
+│   ├── diffEngine.ts           # Diff 引擎
+│   ├── fileSystem.ts           # 文件系统操作
 │   ├── config.ts               # 配置管理
 │   └── difyClient.ts           # Dify API 客户端
 ├── media/                      # Webview 前端资源
@@ -131,35 +145,23 @@ dify-code-assistant/
 └── CHANGELOG.md                # 版本更新日志
 ```
 
-## 📝 开发日志
-
-- [x] 侧边栏 AI 对话面板
-- [x] 代码解释、修复、重构、生成
-- [x] 内联代码补全
-- [x] Webview CSP 安全策略
-- [x] Dify DSL 预配置文件
-- [x] 完整技术文档
-- [ ] 流式响应实时输出
-- [ ] 多模型切换支持
-- [ ] 项目级代码索引
-
-## ⚙️ 全部配置项
+## 全部配置项
 
 | 配置项 | 类型 | 默认值 | 说明 |
 |--------|------|--------|------|
 | `dify.apiUrl` | string | `http://localhost:9000` | Dify API 地址 |
 | `dify.apiKey` | string | — | Dify 应用 API Key（`app-` 开头） |
 | `dify.model` | string | `deepseek-v4-pro` | 使用的模型名称 |
-| `dify.enableAutocomplete` | boolean | `true` | 是否启用内联代码补全 |
-| `dify.maxTokens` | number | `4096` | 最大响应 token 数 |
+| `dify.enableAutocomplete` | boolean | `true` | 是否启用 Ghost Text 补全 |
+| `dify.maxTokens` | number | `8192` | 最大响应 token 数 |
 
-## 🔗 相关链接
+## 相关链接
 
 - [Dify 官网](https://dify.ai)
 - [Dify 文档](https://docs.dify.ai)
 - [VS Code Extension API](https://code.visualstudio.com/api)
 
-## 📄 许可证
+## 许可证
 
 [MIT License](LICENSE)
 
