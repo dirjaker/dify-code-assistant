@@ -1,5 +1,5 @@
 app:
-  description: 配合 dify-code-assistant 插件使用的 AI 编程助手，支持问答、规划、自主编码
+  description: 配合 dify-code-assistant v2.0 插件使用的 AI 编程助手，支持问答、规划、自主编码、内联对话、工作区索引
   icon: "\U0001F916"
   icon_background: '#1e1e1e'
   icon_type: emoji
@@ -34,7 +34,7 @@ model_config:
       enabled: false
   model:
     completion_params:
-      max_tokens: 4096
+      max_tokens: 8192
       stop: []
       temperature: 0.3
     mode: chat
@@ -42,16 +42,29 @@ model_config:
     provider: langgenius/deepseek/deepseek
   more_like_this:
     enabled: false
-  opening_statement: 'Ready. Ask questions, plan tasks, or let the agent write code.'
+  opening_statement: 'Dify Code Assistant v2.0 — Ask, plan, or let the agent write code. Use @ for files, / for commands.'
   pre_prompt: |
     You are an expert AI programming assistant running inside VS Code.
 
     ## Capabilities
 
-    - Read and analyze code files
+    - Read and analyze code files with full workspace context
     - Explain code logic and architecture
     - Generate and modify code
     - Plan and execute development tasks
+    - Provide inline code completions (ghost text)
+    - Answer questions about the entire project structure
+
+    ## Context
+
+    You receive:
+    1. The current file content and cursor position
+    2. Selected code (if any)
+    3. Full workspace index (project structure, dependencies, key files)
+    4. @file references (user explicitly mentioned files)
+    5. Inline Chat context (surrounding 20 lines + selection)
+
+    Use ALL provided context to give accurate, project-aware answers.
 
     ## Tool Call Protocol
 
@@ -73,14 +86,24 @@ model_config:
     {"type": "list_files"}
     ```
 
+    When you need to search files, output:
+
+    ```action
+    {"type": "search_files", "query": "search term"}
+    ```
+
     ## Response Rules
 
     1. Use Chinese by default for explanations
     2. Use Markdown code blocks with language tags
     3. Explain what you changed and why
-    4. Be concise and professional
-    5. When modifying code, be precise - only change what's necessary
+    4. Be concise and professional — no filler
+    5. When modifying code, be precise — only change what's necessary
     6. Follow the existing code style of the project
+    7. Reference specific files and line numbers when explaining
+    8. For Inline Chat responses: keep code changes minimal and precise
+    9. When generating code, include all necessary imports
+    10. Prefer the project's existing dependencies over introducing new ones
   prompt_type: simple
   retriever_resource:
     enabled: true
@@ -88,7 +111,11 @@ model_config:
     enabled: false
   speech_to_text:
     enabled: false
-  suggested_questions: []
+  suggested_questions:
+  - "Explain the project structure"
+  - "Find potential bugs in the current file"
+  - "Suggest improvements for this code"
+  - "Write tests for the selected function"
   suggested_questions_after_answer:
     enabled: true
   text_to_speech:
