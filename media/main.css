@@ -42,8 +42,118 @@ body {
 
 .grid-layout {
     display: grid;
-    grid-template-rows: 1fr auto;
+    grid-template-rows: auto 1fr auto;
     height: 100vh;
+    overflow: hidden;
+}
+
+/* ═══════════════════════════════════════
+   Tab Bar — 多标签页
+   ═══════════════════════════════════════ */
+
+.tab-bar {
+    display: flex;
+    align-items: center;
+    background: #1e1e1e;
+    border-bottom: 1px solid #333;
+    height: 32px;
+    padding: 0 4px;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tab-bar::-webkit-scrollbar { display: none; }
+
+.tab-list {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.tab-list::-webkit-scrollbar { display: none; }
+
+.tab-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: #2d2d2d;
+    border: 1px solid #3e3e3e;
+    border-radius: 6px 6px 0 0;
+    font-size: 11px;
+    color: #888;
+    cursor: pointer;
+    white-space: nowrap;
+    max-width: 140px;
+    min-width: 60px;
+    transition: background 0.1s, color 0.1s;
+    position: relative;
+}
+
+.tab-item:hover {
+    background: #333;
+    color: #ccc;
+}
+
+.tab-item.active {
+    background: #252526;
+    color: #fff;
+    border-bottom-color: #252526;
+}
+
+.tab-item .tab-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+}
+
+.tab-item .tab-close {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 0 2px;
+    font-size: 11px;
+    line-height: 1;
+    border-radius: 3px;
+    opacity: 0;
+    transition: opacity 0.1s, color 0.1s, background 0.1s;
+    flex-shrink: 0;
+}
+
+.tab-item:hover .tab-close {
+    opacity: 1;
+}
+
+.tab-item .tab-close:hover {
+    color: #f44;
+    background: rgba(255, 68, 68, 0.15);
+}
+
+.tab-new {
+    background: none;
+    border: none;
+    color: #666;
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.1s, background 0.1s;
+    flex-shrink: 0;
+}
+
+.tab-new:hover {
+    color: #ccc;
+    background: #333;
 }
 
 /* ═══════════════════════════════════════
@@ -122,18 +232,104 @@ body {
 
 .step {
     position: relative;
-    margin: 0;
-    padding: 8px 12px;
+    margin: 4px 0;
+    padding: 0;
 }
 
 .step + .step {
-    border-top: 1px solid rgba(255,255,255,0.04);
+    border-top: none;
+}
+
+/* 用户消息 — 右侧蓝色气泡 */
+.step.user {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    margin-left: 40px;
+}
+
+.step.user .step-content {
+    background: #0078d4;
+    color: #fff;
+    padding: 8px 12px;
+    border-radius: 10px 10px 2px 10px;
+    max-width: 85%;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.step.user .step-content code {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+}
+
+.step.user .step-content p code {
+    background: rgba(255,255,255,0.15);
+}
+
+.step.user .response-actions {
+    padding: 2px 4px 0;
+}
+
+/* 助手消息 — 左侧深灰气泡 */
+.step.assistant {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-right: 20px;
+}
+
+.step.assistant .step-content {
+    background: #2d2d2d;
+    color: #ccc;
+    padding: 10px 14px;
+    border-radius: 10px 10px 10px 2px;
+    border: 1px solid #3e3e3e;
+    font-size: 13px;
+    line-height: 1.65;
+    width: 100%;
+}
+
+/* 角色标签 */
+.step-label {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 3px;
+    padding: 0 4px;
+}
+
+.step.user .step-label {
+    color: #5a9fd4;
+}
+
+.step.assistant .step-label {
+    color: #666;
 }
 
 /* Step 内容 */
 .step-content {
     font-size: 13px;
     line-height: 1.65;
+}
+
+/* 用户消息中的代码块 */
+.step.user .step-content pre {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    margin-top: 8px;
+}
+
+.step.user .step-content pre code {
+    color: #fff;
+}
+
+/* 助手消息中的代码块 */
+.step.assistant .step-content pre {
+    background: #1e1e1e;
+    border: 1px solid #3e3e3e;
+    border-radius: 6px;
+    margin-top: 8px;
 }
 
 .step-content pre {
@@ -1113,15 +1309,23 @@ pre.has-linenums {
 
 .session-item {
     display: flex;
-    flex-direction: column;
-    gap: 2px;
+    align-items: center;
+    gap: 8px;
     padding: 8px 12px;
-    cursor: pointer;
     border-bottom: 1px solid rgba(255,255,255,0.03);
     transition: background 0.1s ease;
 }
 
 .session-item:hover { background: var(--bg-hover); }
+
+.session-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    cursor: pointer;
+    min-width: 0;
+}
 
 .session-preview {
     font-size: 12px;
@@ -1134,6 +1338,28 @@ pre.has-linenums {
 .session-meta {
     font-size: 10px;
     color: var(--text-muted);
+}
+
+.session-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 4px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s, background 0.15s;
+    flex-shrink: 0;
+}
+
+.session-item:hover .session-delete {
+    opacity: 1;
+}
+
+.session-delete:hover {
+    color: #f44;
+    background: rgba(255, 68, 68, 0.1);
 }
 
 /* ═══════════════════════════════════════

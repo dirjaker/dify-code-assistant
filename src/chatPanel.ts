@@ -121,6 +121,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 case 'deleteSession':
                     this._deleteSession(message.sessionId);
                     break;
+                case 'newTab':
+                    this._newTab();
+                    break;
+                case 'switchTab':
+                    this._switchTab(message.tabId);
+                    break;
+                case 'closeTab':
+                    this._closeTab(message.tabId);
+                    break;
             }
         });
 
@@ -614,6 +623,15 @@ ${modeSuffix}`;
                 createdAt: sessions[this._currentSessionId]?.createdAt || Date.now()
             };
             this._extensionContext.globalState.update('difyChatSessions', sessions);
+            // Update tab title with first user message
+            if (role === 'user' && this._chatHistory.length === 1) {
+                const tab = this._openTabs.find(t => t.id === this._activeTabId);
+                if (tab) {
+                    tab.title = text.slice(0, 20) || 'New Chat';
+                    tab.id = this._currentSessionId; // Link tab to session
+                    this._activeTabId = this._currentSessionId;
+                }
+            }
             this._sendSessionList();
         }
     }
@@ -630,7 +648,16 @@ ${modeSuffix}`;
                 this._currentSessionId = latest.id;
                 this._chatHistory = latest.messages;
                 this._postMessage({ command: 'restoreHistory', messages: latest.messages });
+                // Initialize with one tab for latest session
+                if (this._openTabs.length === 0) {
+                    const title = latest.messages.length > 0 ? latest.messages[0].text.slice(0, 20) : 'New Chat';
+                    this._openTabs.push({ id: latest.id, title });
+                    this._activeTabId = latest.id;
+                }
+            } else if (this._openTabs.length === 0) {
+                this._newTab();
             }
+            this._sendTabUpdate();
         }
     }
 
@@ -647,6 +674,71 @@ ${modeSuffix}`;
                 createdAt: s.createdAt
             }));
         this._postMessage({ command: 'sessionList', sessions: list });
+        this._sendTabUpdate();
+    }
+
+    // ═══════════════════════════════════════
+    // Tab Management
+    // ═══════════════════════════════════════
+    private _openTabs: { id: string; title: string }[] = [];
+    private _activeTabId: string = '';
+
+    private _sendTabUpdate(): void {
+        const tabs = this._openTabs.map(t => ({
+            id: t.id,
+            title: t.title,
+            active: t.id === this._activeTabId
+        }));
+        this._postMessage({ command: 'tabUpdate', tabs, activeTabId: this._activeTabId });
+    }
+
+    private _newTab(): void {
+        // Save current session before creating new
+        const tabId = 'tab_' + Date.now();
+        this._openTabs.push({ id: tabId, title: 'New Chat' });
+        this._activeTabId = tabId;
+        this._currentSessionId = '';
+        this._chatHistory = [];
+        this._client.resetConversation();
+        this._postMessage({ command: 'clearChat' });
+        this._sendTabUpdate();
+    }
+
+    private _switchTab(tabId: string): void {
+        const tab = this._openTabs.find(t => t.id === tabId);
+        if (!tab) return;
+        this._activeTabId = tabId;
+        // Load session associated with this tab
+        if (this._extensionContext) {
+            const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+            // Find session for this tab
+            const session = Object.values(sessions).find(s => s.id === tabId || s.id === this._currentSessionId);
+            if (session) {
+                this._currentSessionId = session.id;
+                this._chatHistory = session.messages;
+                this._client.resetConversation();
+                this._postMessage({ command: 'clearChat' });
+                this._postMessage({ command: 'restoreHistory', messages: session.messages });
+            }
+        }
+        this._sendTabUpdate();
+    }
+
+    private _closeTab(tabId: string): void {
+        const idx = this._openTabs.findIndex(t => t.id === tabId);
+        if (idx < 0) return;
+        this._openTabs.splice(idx, 1);
+        // If closing active tab, switch to another
+        if (this._activeTabId === tabId) {
+            if (this._openTabs.length > 0) {
+                const newActive = this._openTabs[Math.min(idx, this._openTabs.length - 1)];
+                this._switchTab(newActive.id);
+            } else {
+                this._newTab();
+            }
+        } else {
+            this._sendTabUpdate();
+        }
     }
 
     private async _insertCode(code: string): Promise<void> {
@@ -674,6 +766,16 @@ ${modeSuffix}`;
 </head>
 <body>
     <div class="grid-layout">
+        <!-- Tab Bar — 多标签页 -->
+        <div class="tab-bar" id="tabBar">
+            <div class="tab-list" id="tabList"></div>
+            <button class="tab-new" id="tabNewBtn" title="New Chat">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M8 2v12M2 8h12"/>
+                </svg>
+            </button>
+        </div>
+
         <!-- Steps Area — 消息滚动区 -->
         <div class="steps-area" id="stepsArea">
             <div class="welcome" id="welcome">
