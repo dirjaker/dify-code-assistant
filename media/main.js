@@ -400,22 +400,22 @@
         if (!rules) return code;
 
         var result = code;
-        // Track positions to avoid nested replacements
-        var tokens = [];
-        var tempResult = result;
 
         rules.forEach(function(rule) {
             if (rule.repl) {
-                tempResult = tempResult.replace(rule.pattern, rule.repl);
+                result = result.replace(rule.pattern, rule.repl);
             } else {
-                tempResult = tempResult.replace(rule.pattern, function(match) {
-                    if (match.startsWith('<span')) return match; // already wrapped
-                    return '<span class="' + rule.cls + '">' + match + '</span>';
+                result = result.replace(rule.pattern, function(match) {
+                    // 跳过已包裹的 span 标签
+                    if (match.indexOf('<span') === 0) return match;
+                    // 转义 match 内容后包裹（防止 XSS）
+                    var safe = match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return '<span class="' + rule.cls + '">' + safe + '</span>';
                 });
             }
         });
 
-        return tempResult;
+        return result;
     }
 
     // ═══════════════════════════════════════
@@ -981,8 +981,12 @@
 
         html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
             var langClass = lang || 'text';
-            var highlighted = highlightSyntax(escapeHtml(code.trim()), lang);
-            return '<pre><code class="language-' + langClass + '">' + highlighted + '</code></pre>';
+            var trimmed = code.trim();
+            // 先高亮（正则匹配原始代码），再转义非高亮部分
+            var highlighted = highlightSyntax(trimmed, lang);
+            // highlightSyntax 产出的 HTML 已包含 <span> 标签，只需转义剩余纯文本
+            var safe = escapeHtmlPreservingSpans(highlighted);
+            return '<pre><code class="language-' + langClass + '">' + safe + '</code></pre>';
         });
 
         html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
@@ -1004,6 +1008,16 @@
 
     function escapeHtml(text) {
         return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    // 转义 HTML 但保留 <span> 标签（用于语法高亮后的安全输出）
+    function escapeHtmlPreservingSpans(html) {
+        // 先提取所有 <span...>...</span> 标签
+        var parts = html.split(/(<span[^>]*>|<\/span>)/g);
+        return parts.map(function(part) {
+            if (part.startsWith('<span') || part === '</span>') return part; // 保留标签
+            return escapeHtml(part); // 转义纯文本
+        }).join('');
     }
 
     // ═══════════════════════════════════════

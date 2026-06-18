@@ -2,6 +2,37 @@
 
 所有 notable changes 记录在此文件中。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
 
+## [1.2.0] - 2026-06-17
+
+### 新增功能
+
+- **Agent 原生工具调用** — 支持 Dify Agent 原生工具调用协议
+- **本地工具服务器** — 扩展启动时自动启动 HTTP 工具服务器（随机端口）
+- **自动工具注册** — 启动时自动向 Dify 注册工具提供者
+- **6 种工具支持** — read_file、edit_file、run_process、run_terminal、list_files、search_code
+- **工具调用循环** — 自动处理 Agent 的多轮工具调用请求
+
+### Bug 修复
+
+- 修复 `run_terminal` 工具使用 `setTimeout` 不可靠的问题，改用 `child_process.exec`
+- 修复 `run_process` 使用 `require` 而非 import 的问题
+- 修复 `registerTools` OpenAPI schema 不完整的问题，添加所有工具参数定义
+- 修复 `chatPanel.ts` 访问不存在的 `toolResult.filePath` 和 `toolResult.diff` 的问题
+- 添加 `toolError` 消息类型处理工具执行失败
+
+### 优化
+
+- 统一 `run_terminal` 和 `run_process` 的实现
+- 增加 `maxBuffer` 到 10MB
+- 改进错误处理和日志输出
+- 完善 OpenAPI schema，使用 `oneOf` 区分不同工具的参数结构
+
+### 文档
+
+- 更新 README，添加 Agent 工具调用说明
+- 添加工具服务器测试脚本 `scripts/test-tools.sh`
+- 更新项目结构说明
+
 ## [1.0.0] - 2026-06-17
 
 首个正式版本。
