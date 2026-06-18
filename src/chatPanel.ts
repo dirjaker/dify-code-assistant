@@ -28,6 +28,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     private _chatHistory: { role: string; text: string; ts: number }[] = [];
     private _slashCommands: Map<string, { description: string; handler: (args: string) => Promise<string> }> = new Map();
     private _workspaceIndexer?: WorkspaceIndexer;
+    private _toolServerPort: number = 0;
 
     constructor(
         private readonly _extensionUri: vscode.Uri,
@@ -46,6 +47,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this._extensionContext = extensionContext!;
         this._workspaceIndexer = workspaceIndexer;
         this._registerSlashCommands();
+    }
+
+    public setToolServerPort(port: number): void {
+        this._toolServerPort = port;
+        this._client.setToolServerPort(port);
     }
 
     public resolveWebviewView(
@@ -159,9 +165,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
     }
 
     /**
-     * 处理用户消息 — 核心 Agent 循环（流式输出）
-     */
-    /**
      * 处理 @文件引用 — 将 @path 替换为文件内容
      */
     private async _resolveFileReferences(text: string): Promise<string> {
@@ -188,6 +191,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         return resolved;
     }
 
+    /**
+     * 处理用户消息 — 使用 Dify Agent 原生工具调用
+     */
     private async _handleMessage(text: string): Promise<void> {
         this._postMessage({ command: 'startThinking' });
         this._saveMessage('user', text);
@@ -202,59 +208,84 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
             // 构建系统提示词
             const systemPrompt = this._buildSystemPrompt(context);
 
-            // 流式发送消息到 Dify
-            let fullAnswer = '';
-            let streamStarted = false;
+            // 使用 Agent 循环处理消息
+            const fullMessage = context ? `${context}\n\n---\n\n${resolvedText}` : resolvedText;
 
-            const response = await this._client.chatStream(
-                context ? `${context}\n\n---\n\n${resolvedText}` : resolvedText,
-                (chunk: string) => {
-                    if (!streamStarted) {
-                        // 第一个 chunk 到达，通知 webview 开始流式渲染
+            // 调用 Agent 循环
+            const result = await this._client.chatWithAgent(
+                fullMessage,
+                systemPrompt,
+                {
+                    onThinking: () => {
+                        this._postMessage({ command: 'startThinking' });
+                    },
+                    onStreamStart: () => {
                         this._postMessage({ command: 'startStream' });
-                        streamStarted = true;
+                    },
+                    onStreamChunk: (chunk: string) => {
+                        this._postMessage({ command: 'streamChunk', chunk });
+                    },
+                    onStreamEnd: () => {
+                        this._postMessage({ command: 'endStream' });
+                    },
+                    onToolStart: (toolName: string) => {
+                        this._postMessage({ command: 'toolStart', toolName });
+                    },
+                    onToolEnd: (toolName: string, result: string) => {
+                        this._postMessage({ command: 'toolEnd', toolName, result });
+                    },
+                    onAgentThought: (thought: string) => {
+                        this._postMessage({ command: 'agentThought', thought });
                     }
-                    fullAnswer += chunk;
-                    this._postMessage({ command: 'streamChunk', chunk });
-                },
-                systemPrompt
+                }
             );
 
-            // 流式结束
-            if (streamStarted) {
-                this._postMessage({ command: 'endStream' });
-                this._saveMessage('assistant', fullAnswer);
+            // 保存最终答案
+            if (result.answer && result.answer.trim()) {
+                this._postMessage({ command: 'receiveMessage', text: result.answer, role: 'assistant' });
+                this._saveMessage('assistant', result.answer);
             }
 
-            // 解析工具调用
-            const toolCalls = this._toolExecutor.parseToolCalls(fullAnswer);
-
-            if (toolCalls.length > 0) {
-                // 有工具调用 — 执行工具
-                const results = await this._toolExecutor.executeAll(toolCalls);
-
-                for (const result of results) {
-                    if (result.type === 'write_file' && result.diff) {
+            // 如果有工具结果需要显示
+            if (result.toolResults.length > 0) {
+                for (const toolResult of result.toolResults) {
+                    // 处理文件操作结果
+                    if (toolResult.type === 'edit_file' && toolResult.success) {
+                        // edit_file 成功时不显示 diff，因为文件已直接写入
                         this._postMessage({
-                            command: 'showDiff',
-                            filePath: result.diff.filePath,
-                            html: diffToHtml(result.diff),
-                            additions: result.diff.additions,
-                            deletions: result.diff.deletions
+                            command: 'toolResult',
+                            type: 'edit_file',
+                            data: toolResult.data
                         });
-                    } else if (result.type === 'read_file' && result.success) {
+                    } else if (toolResult.type === 'read_file' && toolResult.success) {
                         this._postMessage({
                             command: 'toolResult',
                             type: 'read_file',
-                            data: result.data
+                            data: toolResult.data
+                        });
+                    } else if (toolResult.type === 'list_files' && toolResult.success) {
+                        this._postMessage({
+                            command: 'toolResult',
+                            type: 'list_files',
+                            data: toolResult.data
+                        });
+                    } else if (toolResult.type === 'search_code' && toolResult.success) {
+                        this._postMessage({
+                            command: 'toolResult',
+                            type: 'search_files',
+                            data: toolResult.data
+                        });
+                    } else if (!toolResult.success) {
+                        // 工具执行失败
+                        this._postMessage({
+                            command: 'toolError',
+                            type: toolResult.type,
+                            error: toolResult.error || 'Tool execution failed'
                         });
                     }
                 }
-            } else if (!streamStarted) {
-                // 没有流式输出也没有工具调用，显示完整回复
-                this._postMessage({ command: 'receiveMessage', text: fullAnswer, role: 'assistant' });
-                this._saveMessage('assistant', fullAnswer);
             }
+
         } catch (error: any) {
             this._postMessage({ command: 'receiveMessage', text: 'Error: ' + error.message, role: 'error' });
         } finally {
@@ -334,21 +365,14 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 - 生成和修改代码
 - 规划和执行开发任务
 
-## 工具调用协议
-当需要读取文件时，输出：
-\`\`\`action
-{"type": "read_file", "path": "相对路径"}
-\`\`\`
-
-当需要写入文件时（仅 Agent 模式），输出：
-\`\`\`action
-{"type": "write_file", "path": "相对路径", "content": "完整文件内容", "reason": "修改原因"}
-\`\`\`
-
-当需要列出文件时，输出：
-\`\`\`action
-{"type": "list_files"}
-\`\`\`
+## 工具调用
+你可以使用以下工具来完成任务：
+- read_file: 读取文件内容
+- edit_file: 编辑文件
+- run_process: 运行终端命令
+- run_terminal: 运行终端命令
+- list_files: 列出目录文件
+- search_code: 搜索代码
 
 ## 回答规范
 - 默认使用中文回答

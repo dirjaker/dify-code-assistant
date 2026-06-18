@@ -112,9 +112,11 @@ Respond with code or explanation as appropriate.`;
 
         try {
             let fullAnswer = '';
-            await this.client.chatStream(prompt, (chunk) => {
-                fullAnswer += chunk;
-                this.panel?.webview.postMessage({ command: 'streamChunk', chunk });
+            await this.client.chatStream(prompt, undefined, {
+                onStreamChunk: (chunk: string) => {
+                    fullAnswer += chunk;
+                    this.panel?.webview.postMessage({ command: 'streamChunk', chunk });
+                }
             });
 
             this.panel?.webview.postMessage({ command: 'endStream', fullText: fullAnswer });

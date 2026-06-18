@@ -38,25 +38,62 @@ export class ToolExecutor {
     }
 
     /**
-     * 从 AI 响应中提取工具调用
+     * 从 AI 响应中提取工具调用 — 多格式容错解析
      */
     parseToolCalls(response: string): ToolCall[] {
         const calls: ToolCall[] = [];
-        const regex = /```action\s*\n([\s\S]*?)```/g;
-        let match;
+        const seen = new Set<string>();
 
-        while ((match = regex.exec(response)) !== null) {
-            try {
-                const json = JSON.parse(match[1].trim());
-                if (json.type) {
-                    calls.push(json as ToolCall);
-                }
-            } catch {
-                // 忽略无效的 action 块
+        // Pattern 1: ```action\n{...}\n``` (标准格式)
+        const actionRegex = /```action\s*\n([\s\S]*?)```/g;
+        let match;
+        while ((match = actionRegex.exec(response)) !== null) {
+            const parsed = this._tryParseJson(match[1].trim());
+            if (parsed && parsed.type) {
+                const key = JSON.stringify(parsed);
+                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
+            }
+        }
+
+        // Pattern 2: ```json\n{"type":"read_file",...}\n``` (JSON代码块)
+        const jsonBlockRegex = /```(?:json|tool)?\s*\n([\s\S]*?)```/g;
+        while ((match = jsonBlockRegex.exec(response)) !== null) {
+            const parsed = this._tryParseJson(match[1].trim());
+            if (parsed && parsed.type && ['read_file', 'write_file', 'list_files', 'search_files', 'get_editor'].includes(parsed.type)) {
+                const key = JSON.stringify(parsed);
+                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
+            }
+        }
+
+        // Pattern 3: 行内 JSON {"type":"read_file",...} (无代码块)
+        const inlineRegex = /\{"type"\s*:\s*"(read_file|write_file|list_files|search_files|get_editor)"[^}]*\}/g;
+        while ((match = inlineRegex.exec(response)) !== null) {
+            const parsed = this._tryParseJson(match[0]);
+            if (parsed && parsed.type) {
+                const key = JSON.stringify(parsed);
+                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
             }
         }
 
         return calls;
+    }
+
+    private _tryParseJson(text: string): ToolCall | null {
+        try {
+            // 直接解析
+            const obj = JSON.parse(text);
+            if (obj && typeof obj.type === 'string') return obj as ToolCall;
+        } catch {}
+        try {
+            // 修复常见格式问题：单引号、尾逗号、无引号key
+            let fixed = text
+                .replace(/'/g, '"')
+                .replace(/,\s*([}\]])/g, '$1')
+                .replace(/(\w+)\s*:/g, '"$1":');
+            const obj = JSON.parse(fixed);
+            if (obj && typeof obj.type === 'string') return obj as ToolCall;
+        } catch {}
+        return null;
     }
 
     /**

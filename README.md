@@ -33,6 +33,7 @@
 
 | 功能 | 描述 |
 |------|------|
+| **Agent 工具调用** | Dify Agent 原生工具调用，支持 read_file、edit_file、run_process 等 6 种工具 |
 | **Ghost Text** | Tab 接受内联补全建议，500ms 防抖，智能跳过字符串和注释 |
 | **Inline Chat** | Ctrl+I 在编辑器内直接对话，Insert at Cursor 插入代码 |
 | **@workspace** | 全项目索引（4层深度），检测项目类型、依赖和结构 |
@@ -111,9 +112,40 @@ Dify 应用配置详见 [Dify 配置指南](docs/dify-guide.md)，也可直接�
 | **插件框架** | VS Code Extension API |
 | **UI 渲染** | Webview + 原生 HTML/CSS/JS |
 | **通信协议** | Dify Chat API（blocking + streaming） |
+| **工具调用** | Dify Agent 原生工具调用（HTTP 本地服务器） |
 | **HTTP 客户端** | Node.js 原生 http/https 模块 |
 | **开发语言** | TypeScript |
 | **构建工具** | tsc + @vscode/vsce |
+
+## Agent 工具调用
+
+插件支持 Dify Agent 原生工具调用，扩展会在本地启动一个 HTTP 工具服务器，Dify Agent 可以调用以下工具：
+
+| 工具 | 功能 | 参数 |
+|------|------|------|
+| `read_file` | 读取文件内容 | `path`, `start_line`, `end_line` |
+| `edit_file` | 创建/覆盖文件 | `path`, `content` |
+| `run_process` | 执行终端命令并捕获输出 | `command`, `cwd`, `timeout` |
+| `run_terminal` | 在 VS Code 终端执行命令 | `command`, `cwd` |
+| `list_files` | 列出目录文件 | `path` |
+| `search_code` | 搜索代码内容 | `query`, `include`, `max_results` |
+
+### 工作流程
+
+1. 扩展启动时自动启动本地工具服务器（随机端口）
+2. 扩展自动向 Dify 注册工具提供者
+3. 用户发送消息时，Dify Agent 决定是否需要调用工具
+4. 如果需要，Agent 通过 HTTP 调用本地工具服务器
+5. 工具服务器在 VS Code 环境中执行操作并返回结果
+6. Agent 根据结果继续对话
+
+### 测试工具服务器
+
+```bash
+# 查看工具服务器端口（在 VS Code Output Channel 中）
+# 然后测试
+./scripts/test-tools.sh <PORT>
+```
 
 ## 项目结构
 
@@ -126,6 +158,7 @@ dify-code-assistant/
 │   ├── completionProvider.ts   # Ghost Text 补全提供者
 │   ├── workspaceIndexer.ts     # @workspace 全项目索引
 │   ├── toolExecutor.ts         # 工具执行器（读写文件、终端）
+│   ├── toolServer.ts           # 本地 HTTP 工具服务器（Agent 调用）
 │   ├── decorationManager.ts    # 编辑器装饰管理
 │   ├── modeManager.ts          # 模式管理（ask/plan/agent）
 │   ├── diffEngine.ts           # Diff 引擎
@@ -136,6 +169,9 @@ dify-code-assistant/
 │   ├── main.js                 # 面板交互逻辑
 │   └── main.css                # 面板样式
 ├── resources/                  # 插件图标
+├── scripts/                    # 工具脚本
+│   ├── register-tools.sh       # 注册工具到 Dify
+│   └── test-tools.sh           # 测试工具服务器
 ├── assets/                     # 项目静态资源
 ├── dify/                       # Dify 平台配置（DSL 文件）
 ├── docs/                       # 技术文档

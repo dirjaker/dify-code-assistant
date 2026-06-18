@@ -8,6 +8,7 @@ import { DecorationManager } from './decorationManager';
 import { InlineChatProvider } from './chatInlineProvider';
 import { WorkspaceIndexer } from './workspaceIndexer';
 import { getConfig, validateConfig } from './config';
+import { LocalToolServer } from './toolServer';
 
 let client: DifyClient;
 let completionProvider: CompletionProvider;
@@ -17,6 +18,7 @@ let modeManager: ModeManager;
 let decorationManager: DecorationManager;
 let inlineChatProvider: InlineChatProvider;
 let workspaceIndexer: WorkspaceIndexer;
+let toolServer: LocalToolServer;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
@@ -44,6 +46,26 @@ export function activate(context: vscode.ExtensionContext) {
 
     // Workspace indexer
     workspaceIndexer = new WorkspaceIndexer();
+
+    // 启动本地工具服务器
+    const outputChannel = vscode.window.createOutputChannel('Dify Code Assistant');
+    toolServer = new LocalToolServer(outputChannel);
+    toolServer.start().then(port => {
+        outputChannel.appendLine(`[Extension] Tool server started on port ${port}`);
+        // 将工具服务器端口传给 ChatViewProvider
+        chatViewProvider.setToolServerPort(port);
+
+        // 注册工具到 Dify
+        client.registerTools().then(success => {
+            if (success) {
+                outputChannel.appendLine(`[Extension] Tools registered with Dify successfully`);
+            } else {
+                outputChannel.appendLine(`[Extension] Failed to register tools with Dify`);
+            }
+        });
+    }).catch(err => {
+        outputChannel.appendLine(`[Extension] Failed to start tool server: ${err.message}`);
+    });
 
     // 注册 Inline Chat
     inlineChatProvider = new InlineChatProvider(client);
