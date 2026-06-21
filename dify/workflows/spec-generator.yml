@@ -1,0 +1,393 @@
+app:
+  description: Spec 生成 Workflow - 根据需求自动生成技术设计文档
+  mode: workflow
+  name: Spec 生成
+
+workflow:
+  features:
+    file_upload:
+      allowed_file_extensions:
+        - .md
+        - .txt
+        - .json
+      allowed_file_types:
+        - document
+      allowed_file_upload_methods:
+        - local_file
+        - remote_url
+      enabled: true
+      fileUploadConfig:
+        file_size_limit: 10
+      image:
+        enabled: false
+      number_limits: 3
+
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: llm
+        id: start-to-requirement
+        source: start
+        sourceHandle: source
+        target: requirement-analysis
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: llm
+        id: requirement-to-architecture
+        source: requirement-analysis
+        sourceHandle: source
+        target: architecture-design
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: llm
+        id: architecture-to-api
+        source: architecture-design
+        sourceHandle: source
+        target: api-design
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: template
+        id: api-to-template
+        source: api-design
+        sourceHandle: source
+        target: template-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: template
+          targetType: end
+        id: template-to-end
+        source: template-node
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+    nodes:
+      - data:
+          desc: 开始节点
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 需求描述
+              max_length: 10000
+              options: []
+              required: true
+              type: paragraph
+              variable: requirement
+
+            - label: 项目名称
+              max_length: 100
+              options: []
+              required: true
+              type: text-input
+              variable: project_name
+
+            - label: 技术栈
+              max_length: 200
+              options: []
+              required: false
+              type: text-input
+              variable: tech_stack
+
+        height: 118
+        id: start
+        position:
+          x: 80
+          y: 282
+        positionAbsolute:
+          x: 80
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 需求分析
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 3000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的需求分析师。
+
+                任务：分析用户需求，提取关键信息。
+
+                输出格式：
+                ## 需求分析
+
+                ### 核心功能
+                [功能列表]
+
+                ### 用户故事
+                [用户故事列表]
+
+                ### 验收标准
+                [验收标准列表]
+
+                ### 技术约束
+                [技术约束列表]
+
+            - id: user-prompt
+              role: user
+              text: |
+                项目：{{#start.project_name#}}
+                技术栈：{{#start.tech_stack#}}
+
+                需求描述：
+                {{#start.requirement#}}
+
+                请分析需求：
+          selected: false
+          title: 需求分析
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: requirement-analysis
+        position:
+          x: 400
+          y: 282
+        positionAbsolute:
+          x: 400
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 架构设计
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 4000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的架构师。
+
+                任务：根据需求分析，设计系统架构。
+
+                输出格式：
+                ## 架构设计
+
+                ### 系统架构
+                [架构图描述]
+
+                ### 模块划分
+                [模块列表和职责]
+
+                ### 数据流
+                [数据流描述]
+
+                ### 技术选型
+                [技术选型建议]
+
+            - id: user-prompt
+              role: user
+              text: |
+                项目：{{#start.project_name#}}
+                技术栈：{{#start.tech_stack#}}
+
+                需求分析：
+                {{#requirement-analysis.text#}}
+
+                请设计架构：
+          selected: false
+          title: 架构设计
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: architecture-design
+        position:
+          x: 720
+          y: 282
+        positionAbsolute:
+          x: 720
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: API 设计
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 4000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的 API 设计师。
+
+                任务：根据架构设计，设计 API 接口。
+
+                输出格式：
+                ## API 设计
+
+                ### 接口列表
+                [接口列表，包含：路径、方法、参数、返回值]
+
+                ### 数据模型
+                [数据模型定义]
+
+                ### 错误码
+                [错误码定义]
+
+                ### 认证方式
+                [认证方式说明]
+
+            - id: user-prompt
+              role: user
+              text: |
+                项目：{{#start.project_name#}}
+
+                架构设计：
+                {{#architecture-design.text#}}
+
+                请设计 API：
+          selected: false
+          title: API 设计
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: api-design
+        position:
+          x: 1040
+          y: 282
+        positionAbsolute:
+          x: 1040
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          desc: 生成文档
+          selected: false
+          title: 文档模板
+          type: template
+          template: |
+            # {{#start.project_name#}} - 技术设计文档
+
+            ## 1. 需求分析
+
+            {{#requirement-analysis.text#}}
+
+            ## 2. 架构设计
+
+            {{#architecture-design.text#}}
+
+            ## 3. API 设计
+
+            {{#api-design.text#}}
+
+            ## 4. 实现计划
+
+            ### 4.1 里程碑
+
+            | 里程碑 | 时间 | 交付物 |
+            |--------|------|--------|
+            | M1 | 第1周 | 项目搭建、基础架构 |
+            | M2 | 第2周 | 核心功能开发 |
+            | M3 | 第3周 | 测试、优化 |
+            | M4 | 第4周 | 文档、部署 |
+
+            ### 4.2 风险评估
+
+            [风险评估]
+
+            ## 5. 附录
+
+            [附录内容]
+
+        height: 98
+        id: template-node
+        position:
+          x: 1360
+          y: 282
+        positionAbsolute:
+          x: 1360
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          desc: 输出结果
+          outputs:
+            - value_selector:
+                - template-node
+                - output
+              variable: spec_document
+          selected: false
+          title: 结束
+          type: end
+
+        height: 90
+        id: end-node
+        position:
+          x: 1680
+          y: 282
+        positionAbsolute:
+          x: 1680
+          y: 282
+        type: custom
+        width: 244
+
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1

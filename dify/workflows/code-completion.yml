@@ -1,0 +1,186 @@
+app:
+  description: 代码补全 Workflow - 根据上下文自动补全代码
+  mode: workflow
+  name: 代码补全
+
+workflow:
+  features:
+    file_upload:
+      allowed_file_extensions:
+        - .py
+        - .js
+        - .ts
+        - .jsx
+        - .tsx
+        - .java
+        - .go
+        - .rs
+      allowed_file_types:
+        - document
+      allowed_file_upload_methods:
+        - local_file
+        - remote_url
+      enabled: true
+      fileUploadConfig:
+        file_size_limit: 15
+      image:
+        enabled: false
+      number_limits: 5
+
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: llm
+        id: start-to-llm
+        source: start
+        sourceHandle: source
+        target: llm-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: llm-to-end
+        source: llm-node
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+    nodes:
+      - data:
+          desc: 开始节点
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 代码上下文
+              max_length: 10000
+              options: []
+              required: true
+              type: paragraph
+              variable: code_context
+
+            - label: 语言类型
+              max_length: 50
+              options:
+                - Python
+                - JavaScript
+                - TypeScript
+                - Java
+                - Go
+                - Rust
+              required: true
+              type: select
+              variable: language
+
+            - label: 补全类型
+              max_length: 50
+              options:
+                - 函数补全
+                - 类补全
+                - 代码块补全
+                - 行补全
+              required: true
+              type: select
+              variable: completion_type
+
+        height: 118
+        id: start
+        position:
+          x: 80
+          y: 282
+        positionAbsolute:
+          x: 80
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: LLM 代码补全
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 2000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的代码补全助手。根据提供的代码上下文，补全缺失的代码。
+
+                规则：
+                1. 只输出需要补全的代码，不要包含已有的代码
+                2. 保持代码风格一致
+                3. 遵循语言最佳实践
+                4. 添加必要的注释
+                5. 确保代码可运行
+
+            - id: user-prompt
+              role: user
+              text: |
+                语言：{{#start.language#}}
+                补全类型：{{#start.completion_type#}}
+
+                代码上下文：
+                ```{{#start.language#}}
+                {{#start.code_context#}}
+                ```
+
+                请补全代码：
+          selected: false
+          title: 代码补全
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: llm-node
+        position:
+          x: 400
+          y: 282
+        positionAbsolute:
+          x: 400
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          desc: 输出结果
+          outputs:
+            - value_selector:
+                - llm-node
+                - text
+              variable: completion_result
+          selected: false
+          title: 结束
+          type: end
+
+        height: 90
+        id: end-node
+        position:
+          x: 720
+          y: 282
+        positionAbsolute:
+          x: 720
+          y: 282
+        type: custom
+        width: 244
+
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1
