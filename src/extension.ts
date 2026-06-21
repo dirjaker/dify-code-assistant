@@ -11,6 +11,7 @@ import { getConfig, validateConfig } from './config';
 import { LocalToolServer } from './toolServer';
 import { ContextCollector } from './contextCollector';
 import { RAGCompletionProvider } from './ragCompletionProvider';
+import { ToolExecutor } from './tools';
 
 let client: DifyClient;
 let completionProvider: CompletionProvider;
@@ -23,6 +24,7 @@ let workspaceIndexer: WorkspaceIndexer;
 let toolServer: LocalToolServer;
 let contextCollector: ContextCollector;
 let ragCompletionProvider: RAGCompletionProvider;
+let toolExecutor: ToolExecutor;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
@@ -57,6 +59,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 启动本地工具服务器
     const outputChannel = vscode.window.createOutputChannel('Dify Code Assistant');
+    
+    // 初始化工具执行器
+    toolExecutor = new ToolExecutor(workspaceRoot, outputChannel);
+    
     toolServer = new LocalToolServer(outputChannel);
     toolServer.start().then(port => {
         outputChannel.appendLine(`[Extension] Tool server started on port ${port}`);
