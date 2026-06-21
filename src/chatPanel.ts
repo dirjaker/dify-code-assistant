@@ -359,20 +359,99 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
 
         return `你是一个专业的 AI 编程助手，运行在 VS Code 编辑器中。
 
-## 能力
-- 阅读和分析代码
-- 解释代码逻辑
-- 生成和修改代码
-- 规划和执行开发任务
+## 可用工具
+当你需要操作文件或执行命令时，使用以下工具（用 \`\`\`tool 代码块）：
 
-## 工具调用
-你可以使用以下工具来完成任务：
-- read_file: 读取文件内容
-- edit_file: 编辑文件
-- run_process: 运行终端命令
-- run_terminal: 运行终端命令
-- list_files: 列出目录文件
-- search_code: 搜索代码
+### read_file — 读取文件
+\`\`\`tool
+tool_name: read_file
+path: src/main.ts
+start_line: 1
+end_line: 50
+\`\`\`
+
+### write_file — 写入文件
+\`\`\`tool
+tool_name: write_file
+path: src/new-file.ts
+content: // file content here
+\`\`\`
+
+### edit_file — 精确替换（old_text 必须在文件中唯一）
+\`\`\`tool
+tool_name: edit_file
+path: src/main.ts
+old_text: const old = "value"
+new_text: const updated = "newValue"
+\`\`\`
+
+### search_files — 搜索代码
+\`\`\`tool
+tool_name: search_files
+query: functionName
+include: *.ts
+\`\`\`
+
+### list_files — 列出目录
+\`\`\`tool
+tool_name: list_files
+path: src
+recursive: true
+max_depth: 2
+\`\`\`
+
+### execute_command — 执行终端命令
+\`\`\`tool
+tool_name: execute_command
+command: npm test
+\`\`\`
+
+### create_directory — 创建目录
+\`\`\`tool
+tool_name: create_directory
+path: src/utils
+\`\`\`
+
+### delete_file — 删除文件
+\`\`\`tool
+tool_name: delete_file
+path: src/old-file.ts
+\`\`\`
+
+### move_file — 移动/重命名
+\`\`\`tool
+tool_name: move_file
+source: src/old.ts
+destination: src/new.ts
+\`\`\`
+
+### get_diagnostics — 获取诊断信息
+\`\`\`tool
+tool_name: get_diagnostics
+path: src/main.ts
+\`\`\`
+
+### insert_code — 在指定行插入代码
+\`\`\`tool
+tool_name: insert_code
+path: src/main.ts
+line: 10
+content: const newVar = "hello";
+position: after
+\`\`\`
+
+### get_symbols — 获取文件中的符号
+\`\`\`tool
+tool_name: get_symbols
+path: src/main.ts
+\`\`\`
+
+## 工具使用规则
+1. 需要读文件时，先用 read_file 或 list_files 了解结构
+2. 修改文件时，用 edit_file 精确替换（不要用 write_file 覆写整个文件，除非是新文件）
+3. 一次可以发多个 \`\`\`tool 块，会按顺序执行
+4. 工具结果会以 [Tool Result] 格式返回
+5. 先读后改，先理解再动手
 
 ## 回答规范
 - 默认使用中文回答
