@@ -75,13 +75,14 @@ export class CompletionProvider implements vscode.InlineCompletionItemProvider {
             const fileName = document.fileName.split(/[\/]/).pop() || '';
             const prompt = this.buildPrompt(textBefore, textAfter, languageId, fileName);
 
-            const response = await this.client.chat(prompt);
-            let completion = this.extractCompletion(response.answer, textBefore, position);
+            // 使用 queryCodeCompletion 而非 chat()，避免污染全局 messageHistory
+            const completion = await this.client.queryCodeCompletion(prompt, languageId, 'ghost-text');
+            let extracted = this.extractCompletion(completion, textBefore, position);
 
-            if (completion && !token.isCancellationRequested) {
-                this.cache.set(cacheKey, completion);
+            if (extracted && !token.isCancellationRequested) {
+                this.cache.set(cacheKey, extracted);
                 this.limitCache(100);
-                return [new vscode.InlineCompletionItem(completion)];
+                return [new vscode.InlineCompletionItem(extracted)];
             }
         } catch {
             // Silent fail for completions

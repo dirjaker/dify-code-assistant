@@ -79,9 +79,9 @@ export class RAGCompletionProvider implements vscode.InlineCompletionItemProvide
 
             // 收集上下文
             const fileContext = await this.contextCollector.collectFileContext(document.fileName);
-            const selectionContext = await this.contextCollector.collectSelectionContext(
-                vscode.window.activeTextEditor!
-            );
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) return [];
+            const selectionContext = await this.contextCollector.collectSelectionContext(editor);
 
             // 构建 RAG 查询
             const ragQuery = this.buildRAGQuery(

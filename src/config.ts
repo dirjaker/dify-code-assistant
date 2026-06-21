@@ -5,6 +5,7 @@ export interface DifyConfig {
     apiKey: string;
     model: string;
     enableAutocomplete: boolean;
+    enableRagCompletion: boolean;
     maxTokens: number;
 }
 
@@ -15,6 +16,7 @@ export function getConfig(): DifyConfig {
         apiKey: config.get<string>('apiKey', ''),
         model: config.get<string>('model', 'deepseek-coder'),
         enableAutocomplete: config.get<boolean>('enableAutocomplete', true),
+        enableRagCompletion: config.get<boolean>('enableRagCompletion', false),
         maxTokens: config.get<number>('maxTokens', 2048)
     };
 }

@@ -1,12 +1,6 @@
 import * as http from 'http';
 import * as https from 'https';
-
-export interface DifyConfig {
-    apiUrl: string;
-    apiKey: string;
-    maxTokens?: number;
-    model?: string;
-}
+import { DifyConfig } from './config';
 
 export interface ChatResponse {
     answer: string;
@@ -43,6 +37,7 @@ export class DifyClient {
     private conversationId: string | null = null;
     private messageHistory: Array<{ role: string; content: string }> = [];
     private toolServerPort: number = 0;
+    private toolAuthToken: string = '';
 
     constructor(config: DifyConfig) {
         this.config = config;
@@ -50,6 +45,10 @@ export class DifyClient {
 
     setToolServerPort(port: number): void {
         this.toolServerPort = port;
+    }
+
+    setToolAuthToken(token: string): void {
+        this.toolAuthToken = token;
     }
 
     updateConfig(config: DifyConfig): void {
@@ -255,7 +254,10 @@ export class DifyClient {
                 port: this.toolServerPort,
                 path: '/execute',
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(this.toolAuthToken ? { 'Authorization': `Bearer ${this.toolAuthToken}` } : {})
+                }
             }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
@@ -293,12 +295,18 @@ export class DifyClient {
         const allToolResults: any[] = [];
         const allToolCalls: ToolCallInfo[] = [];
 
+        // 保存全局历史，Agent 循环中不累积到全局
+        const savedHistory = [...this.messageHistory];
+
         while (iteration < maxIterations) {
             iteration++;
             callbacks?.onThinking?.();
 
-            // 发送到 Dify
+            // 临时恢复全局历史用于 API 调用
+            this.messageHistory = [...savedHistory];
             const response = await this.chatStream(currentQuery, systemPrompt, callbacks);
+            // 立即恢复，不让中间工具消息污染全局
+            this.messageHistory = [...savedHistory];
 
             // 检查 Dify Agent 原生工具调用
             if (response.toolCalls.length > 0) {
@@ -379,6 +387,9 @@ export class DifyClient {
             break;
         }
 
+        // 恢复全局历史 + 记录最终对话
+        this.messageHistory = [...savedHistory, { role: 'user', content: query }, { role: 'assistant', content: fullAnswer }];
+
         return {
             answer: fullAnswer,
             conversationId: this.conversationId || '',
@@ -390,11 +401,7 @@ export class DifyClient {
 
     /**
      * 解析 AI 返回中的 ```tool 代码块
-     * 格式：
-     * ```tool
-     * tool_name: read_file
-     * path: src/main.ts
-     * ```
+     * 支持多行值：key: 后面的所有行（直到下一个 key: 或代码块结束）都属于该值
      */
     private parseToolBlocks(answer: string): { tool: string; params: Record<string, any> }[] {
         const blocks: { tool: string; params: Record<string, any> }[] = [];
@@ -405,25 +412,37 @@ export class DifyClient {
             const block = match[1].trim();
             const params: Record<string, any> = {};
             let toolName = '';
+            let currentKey = '';
+            let currentValues: string[] = [];
+
+            const flush = () => {
+                if (currentKey && currentKey !== 'tool_name' && currentKey !== 'tool') {
+                    const val = currentValues.join('\n').trim();
+                    try { params[currentKey] = JSON.parse(val); }
+                    catch { params[currentKey] = val; }
+                }
+                currentKey = '';
+                currentValues = [];
+            };
 
             for (const line of block.split('\n')) {
                 const colonIdx = line.indexOf(':');
-                if (colonIdx < 0) continue;
-
-                const key = line.substring(0, colonIdx).trim();
-                const value = line.substring(colonIdx + 1).trim();
-
-                if (key === 'tool_name' || key === 'tool') {
-                    toolName = value;
-                } else if (key) {
-                    // 尝试解析 JSON 值
-                    try {
-                        params[key] = JSON.parse(value);
-                    } catch {
-                        params[key] = value;
+                // 判断是否是新 key 行：key 部分只含小写字母和下划线
+                if (colonIdx > 0 && /^[a-z_]+$/.test(line.substring(0, colonIdx).trim())) {
+                    flush();
+                    currentKey = line.substring(0, colonIdx).trim();
+                    const value = line.substring(colonIdx + 1).trim();
+                    if (currentKey === 'tool_name' || currentKey === 'tool') {
+                        toolName = value;
+                    } else {
+                        currentValues.push(value);
                     }
+                } else if (currentKey) {
+                    // 续行
+                    currentValues.push(line);
                 }
             }
+            flush();
 
             if (toolName) {
                 blocks.push({ tool: toolName, params });
@@ -474,6 +493,15 @@ export class DifyClient {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
+                    if (res.statusCode && res.statusCode >= 400) {
+                        try {
+                            const errBody = JSON.parse(data);
+                            reject(new Error(errBody.message || errBody.error || `HTTP ${res.statusCode}`));
+                        } catch {
+                            reject(new Error(`HTTP ${res.statusCode}: ${data.substring(0, 200)}`));
+                        }
+                        return;
+                    }
                     try { resolve(JSON.parse(data)); }
                     catch { reject(new Error(`Invalid JSON response: ${data.substring(0, 300)}`)); }
                 });
