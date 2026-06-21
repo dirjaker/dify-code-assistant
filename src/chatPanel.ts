@@ -803,6 +803,7 @@ ${modeSuffix}`;
         <!-- Steps Area — 消息滚动区 -->
         <div class="steps-area" id="stepsArea">
             <div class="welcome" id="welcome">
+                <div class="welcome-logo">D</div>
                 <div class="welcome-title">Dify Code Assistant</div>
                 <div class="welcome-desc">Ask questions, plan tasks, or let the agent write code.</div>
                 <div class="welcome-features">
@@ -813,24 +814,28 @@ ${modeSuffix}`;
                 </div>
                 <div class="conversation-starters">
                     <button class="starter-btn" data-prompt="Explain this code">
+                        <span class="starter-icon">💡</span>
                         <div>
                             <div class="starter-label">Explain</div>
                             <div class="starter-desc">Describe what the selected code does</div>
                         </div>
                     </button>
                     <button class="starter-btn" data-prompt="Find and fix bugs in this code">
+                        <span class="starter-icon">🐛</span>
                         <div>
                             <div class="starter-label">Fix Bugs</div>
                             <div class="starter-desc">Identify and resolve issues</div>
                         </div>
                     </button>
                     <button class="starter-btn" data-prompt="Refactor this code to improve readability">
+                        <span class="starter-icon">🔧</span>
                         <div>
                             <div class="starter-label">Refactor</div>
-                            <div class="starter-desc">Improve code structure and readability</div>
+                            <div class="starter-desc">Improve code structure</div>
                         </div>
                     </button>
                     <button class="starter-btn" data-prompt="Write unit tests for this code">
+                        <span class="starter-icon">🧪</span>
                         <div>
                             <div class="starter-label">Write Tests</div>
                             <div class="starter-desc">Generate test cases</div>
@@ -841,66 +846,92 @@ ${modeSuffix}`;
 
             <!-- Thinking Indicator -->
             <div class="thinking" id="thinking">
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <div class="dot"></div>
-                <span>Thinking...</span>
+                <div class="thinking-dots">
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                    <div class="thinking-dot"></div>
+                </div>
+                <span class="thinking-text">Agent is thinking...</span>
             </div>
         </div>
 
-        <!-- Input Area — Continue 风格，固定底部 -->
+        <!-- Input Area — Premium Design -->
         <div class="input-area">
-            <!-- Mode Toolbar -->
-            <div class="input-toolbar">
-                <div class="toolbar-left">
-                    <button class="mode-btn active" data-mode="ask">Ask</button>
-                    <button class="mode-btn" data-mode="plan">Plan</button>
-                    <button class="mode-btn" data-mode="agent">Agent</button>
-                </div>
-                <div class="toolbar-right">
-                    <button class="icon-btn" id="historyBtn" title="History">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="8" cy="8" r="6"/>
-                            <path d="M8 4v4l3 2"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" id="clearBtn" title="New Chat">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <path d="M2 2h12M5 2V1h6v1M3 2v11a1 1 0 001 1h8a1 1 0 001-1V2"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" id="settingsBtn" title="Settings">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                            <circle cx="8" cy="8" r="2.5"/>
-                            <path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
             <!-- Context Tags -->
             <div class="context-tags" id="inputContext"></div>
 
-            <!-- @File Autocomplete Dropdown -->
-            <div class="file-dropdown" id="fileDropdown"></div>
+            <!-- Input Container -->
+            <div class="input-container">
+                <!-- @File Autocomplete Dropdown -->
+                <div class="file-dropdown" id="fileDropdown"></div>
 
-            <!-- Slash Command Dropdown -->
-            <div class="slash-dropdown" id="slashDropdown"></div>
+                <!-- Slash Command Dropdown -->
+                <div class="slash-dropdown" id="slashDropdown"></div>
 
-            <!-- Input Row -->
-            <div class="input-row">
-                <textarea id="userInput" placeholder="Ask anything... (type @ for files, / for commands)" rows="1"></textarea>
-                <button id="sendBtn" title="Send (Enter)">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path d="M14 2L7 9M14 2l-5 12-3-7-7-3 12-5z"/>
-                    </svg>
-                </button>
-            </div>
+                <!-- Input Box -->
+                <div class="input-box">
+                    <div class="input-wrapper">
+                        <textarea id="userInput" placeholder="Tell me what to build... (type @ for files, / for commands)" rows="1"></textarea>
+                    </div>
+                    <button id="sendBtn" title="Send (Enter)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="22" y1="2" x2="11" y2="13"/>
+                            <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+                        </svg>
+                    </button>
+                </div>
 
-            <!-- Hint -->
-            <div class="input-hint">
-                <span><kbd>Enter</kbd> send / <kbd>Shift+Enter</kbd> newline</span>
-                <span class="input-mode-label" id="modeLabel">Ask mode</span>
+                <!-- Input Footer -->
+                <div class="input-footer">
+                    <!-- Mode Dropdown -->
+                    <div class="mode-dropdown" id="modeDropdown">
+                        <button class="mode-trigger" id="modeTrigger">
+                            <span class="mode-trigger-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                                </svg>
+                            </span>
+                            <span id="currentModeText">Agent</span>
+                            <span class="mode-trigger-chevron">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"/>
+                                </svg>
+                            </span>
+                        </button>
+
+                        <!-- Dropdown Menu -->
+                        <div class="mode-menu" id="modeMenu"></div>
+                    </div>
+
+                    <!-- Keyboard Shortcuts -->
+                    <div class="input-hints">
+                        <span class="input-hint"><kbd>Enter</kbd> send</span>
+                        <span class="input-hint"><kbd>Shift+Enter</kbd> newline</span>
+                    </div>
+
+                    <!-- Toolbar Actions -->
+                    <div class="toolbar-actions">
+                        <button class="action-btn" id="historyBtn" title="History">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                        </button>
+                        <button class="action-btn" id="clearBtn" title="Clear">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="3 6 5 6 21 6"/>
+                                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </button>
+                        <button class="action-btn" id="settingsBtn" title="Settings">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"/>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
