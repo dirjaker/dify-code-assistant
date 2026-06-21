@@ -25,6 +25,30 @@ export function generateDiff(oldContent: string, newContent: string, filePath: s
     const newLines = newContent.split('\n');
     const hunks: DiffHunk[] = [];
 
+    // 大文件保护：超过 5000 行跳过 LCS，使用简单 diff
+    if (oldLines.length > 5000 || newLines.length > 5000) {
+        const maxLen = Math.max(oldLines.length, newLines.length);
+        let additions = 0;
+        let deletions = 0;
+        for (let i = 0; i < maxLen; i++) {
+            if (i >= oldLines.length) {
+                hunks.push({ type: 'add', content: newLines[i], line: i + 1 });
+                additions++;
+            } else if (i >= newLines.length) {
+                hunks.push({ type: 'remove', content: oldLines[i], line: i + 1 });
+                deletions++;
+            } else if (oldLines[i] !== newLines[i]) {
+                hunks.push({ type: 'remove', content: oldLines[i], line: i + 1 });
+                hunks.push({ type: 'add', content: newLines[i], line: i + 1 });
+                additions++;
+                deletions++;
+            } else {
+                hunks.push({ type: 'context', content: oldLines[i], line: i + 1 });
+            }
+        }
+        return { filePath, hunks, oldContent, newContent, additions, deletions };
+    }
+
     // 使用简单的 LCS diff 算法
     const lcs = computeLCS(oldLines, newLines);
     const diff = backtrackDiff(oldLines, newLines, lcs);

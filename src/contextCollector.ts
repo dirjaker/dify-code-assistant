@@ -8,10 +8,17 @@ import * as fs from 'fs';
  */
 export class ContextCollector {
     private workspaceRoot: string;
-    private cache: Map<string, any> = new Map();
+    private cache: Map<string, { data: any; timestamp: number }> = new Map();
+    private cacheTTL: number = 5 * 60 * 1000; // 5 分钟
 
     constructor(workspaceRoot: string) {
         this.workspaceRoot = workspaceRoot;
+
+        // 监听文件变更，清除对应缓存
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            const key = `file:${e.document.fileName}`;
+            this.cache.delete(key);
+        });
     }
 
     /**
@@ -19,8 +26,9 @@ export class ContextCollector {
      */
     async collectFileContext(filePath: string): Promise<FileContext> {
         const cacheKey = `file:${filePath}`;
-        if (this.cache.has(cacheKey)) {
-            return this.cache.get(cacheKey);
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+            return cached.data;
         }
 
         const document = await vscode.workspace.openTextDocument(filePath);
@@ -49,7 +57,7 @@ export class ContextCollector {
             dependencies
         };
 
-        this.cache.set(cacheKey, context);
+        this.cache.set(cacheKey, { data: context, timestamp: Date.now() });
         return context;
     }
 
@@ -58,8 +66,9 @@ export class ContextCollector {
      */
     async collectProjectContext(): Promise<ProjectContext> {
         const cacheKey = 'project';
-        if (this.cache.has(cacheKey)) {
-            return this.cache.get(cacheKey);
+        const cached = this.cache.get(cacheKey);
+        if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+            return cached.data;
         }
 
         // 扫描项目结构
@@ -81,7 +90,7 @@ export class ContextCollector {
             projectType
         };
 
-        this.cache.set(cacheKey, context);
+        this.cache.set(cacheKey, { data: context, timestamp: Date.now() });
         return context;
     }
 

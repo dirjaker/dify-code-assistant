@@ -1,134 +1,43 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
 import { FileSystemProvider } from './fileSystem';
-import { generateDiff, diffToHtml, diffToText, FileDiff } from './diffEngine';
-import { ModeManager } from './modeManager';
+import { generateDiff, FileDiff } from './diffEngine';
 import { DecorationManager } from './decorationManager';
 
 /**
- * AI 工具调用协议
- */
-export interface ToolCall {
-    type: 'read_file' | 'write_file' | 'list_files' | 'search_files' | 'get_editor';
-    path?: string;
-    content?: string;
-    query?: string;
-    reason?: string;
-}
-
-export interface ToolResult {
-    type: string;
-    success: boolean;
-    data: string;
-    diff?: FileDiff;
-}
-
-/**
- * 工具执行器 — 解析和执行 AI 返回的工具调用
+ * Diff 确认管理器
+ * 
+ * 职责：管理文件修改的 diff 预览和用户确认流程。
+ * 工具执行统一走 toolServer.ts（HTTP 服务器），本模块只负责：
+ * - 存储待确认的文件写入
+ * - 计算 diff
+ * - 用户确认后写入文件 + 高亮变更
  */
 export class ToolExecutor {
     private fs: FileSystemProvider;
-    private modeManager: ModeManager;
     private decorationManager: DecorationManager;
     private pendingWrites: Map<string, { oldContent: string; newContent: string; reason: string }> = new Map();
 
-    constructor(fs: FileSystemProvider, modeManager: ModeManager, decorationManager: DecorationManager) {
+    constructor(fs: FileSystemProvider, _modeManager: any, decorationManager: DecorationManager) {
         this.fs = fs;
-        this.modeManager = modeManager;
         this.decorationManager = decorationManager;
     }
 
     /**
-     * 从 AI 响应中提取工具调用 — 多格式容错解析
+     * 添加待确认的写入
      */
-    parseToolCalls(response: string): ToolCall[] {
-        const calls: ToolCall[] = [];
-        const seen = new Set<string>();
-
-        // Pattern 1: ```action\n{...}\n``` (标准格式)
-        const actionRegex = /```action\s*\n([\s\S]*?)```/g;
-        let match;
-        while ((match = actionRegex.exec(response)) !== null) {
-            const parsed = this._tryParseJson(match[1].trim());
-            if (parsed && parsed.type) {
-                const key = JSON.stringify(parsed);
-                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
-            }
-        }
-
-        // Pattern 2: ```json\n{"type":"read_file",...}\n``` (JSON代码块)
-        const jsonBlockRegex = /```(?:json|tool)?\s*\n([\s\S]*?)```/g;
-        while ((match = jsonBlockRegex.exec(response)) !== null) {
-            const parsed = this._tryParseJson(match[1].trim());
-            if (parsed && parsed.type && ['read_file', 'write_file', 'list_files', 'search_files', 'get_editor'].includes(parsed.type)) {
-                const key = JSON.stringify(parsed);
-                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
-            }
-        }
-
-        // Pattern 3: 行内 JSON {"type":"read_file",...} (无代码块)
-        const inlineRegex = /\{"type"\s*:\s*"(read_file|write_file|list_files|search_files|get_editor)"[^}]*\}/g;
-        while ((match = inlineRegex.exec(response)) !== null) {
-            const parsed = this._tryParseJson(match[0]);
-            if (parsed && parsed.type) {
-                const key = JSON.stringify(parsed);
-                if (!seen.has(key)) { seen.add(key); calls.push(parsed); }
-            }
-        }
-
-        return calls;
-    }
-
-    private _tryParseJson(text: string): ToolCall | null {
-        try {
-            // 直接解析
-            const obj = JSON.parse(text);
-            if (obj && typeof obj.type === 'string') return obj as ToolCall;
-        } catch {}
-        try {
-            // 修复常见格式问题：单引号、尾逗号、无引号key
-            let fixed = text
-                .replace(/'/g, '"')
-                .replace(/,\s*([}\]])/g, '$1')
-                .replace(/(\w+)\s*:/g, '"$1":');
-            const obj = JSON.parse(fixed);
-            if (obj && typeof obj.type === 'string') return obj as ToolCall;
-        } catch {}
-        return null;
+    addPendingWrite(filePath: string, newContent: string, reason: string = ''): FileDiff {
+        const oldFile = this.fs.getWorkspaceRoot()
+            ? this.readFileSync(filePath)
+            : '';
+        const diff = generateDiff(oldFile, newContent, filePath);
+        this.pendingWrites.set(filePath, { oldContent: oldFile, newContent, reason });
+        return diff;
     }
 
     /**
-     * 执行单个工具调用
-     */
-    async executeTool(call: ToolCall): Promise<ToolResult> {
-        switch (call.type) {
-            case 'read_file':
-                return this.executeReadFile(call.path || '');
-            case 'write_file':
-                return this.executeWriteFile(call.path || '', call.content || '', call.reason || '');
-            case 'list_files':
-                return this.executeListFiles();
-            case 'search_files':
-                return this.executeSearchFiles(call.query || '');
-            case 'get_editor':
-                return this.executeGetEditor();
-            default:
-                return { type: call.type, success: false, data: `Unknown tool: ${call.type}` };
-        }
-    }
-
-    /**
-     * 执行所有工具调用
-     */
-    async executeAll(calls: ToolCall[]): Promise<ToolResult[]> {
-        const results: ToolResult[] = [];
-        for (const call of calls) {
-            results.push(await this.executeTool(call));
-        }
-        return results;
-    }
-
-    /**
-     * 获取待确认的写入操作
+     * 获取所有待确认的写入
      */
     getPendingWrites(): Map<string, { oldContent: string; newContent: string; reason: string }> {
         return this.pendingWrites;
@@ -139,30 +48,32 @@ export class ToolExecutor {
      */
     async applyPendingWrite(filePath: string): Promise<boolean> {
         const pending = this.pendingWrites.get(filePath);
-        if (!pending) { return false; }
+        if (!pending) return false;
 
         const root = this.fs.getWorkspaceRoot();
-        if (!root) { return false; }
+        if (!root) return false;
 
-        const absolutePath = filePath.startsWith('/') ? filePath : `${root}/${filePath}`;
-        const uri = vscode.Uri.file(absolutePath);
+        const absolutePath = filePath.startsWith('/') ? filePath : path.join(root, filePath);
 
-        // 1. 写入文件
-        const success = await this.fs.writeFile(filePath, pending.newContent);
-        if (!success) { return false; }
+        try {
+            // 写入文件
+            await fs.promises.writeFile(absolutePath, pending.newContent, 'utf-8');
 
-        // 2. 打开文件到编辑器
-        const document = await vscode.workspace.openTextDocument(uri);
-        const editor = await vscode.window.showTextDocument(document, { preview: false });
+            // 打开文件到编辑器
+            const uri = vscode.Uri.file(absolutePath);
+            const document = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(document, { preview: false });
 
-        // 3. 计算 diff 并高亮
-        const diff = generateDiff(pending.oldContent, pending.newContent, filePath);
-        this.applyDiffDecorations(editor, diff);
+            // 计算 diff 并高亮
+            const diff = generateDiff(pending.oldContent, pending.newContent, filePath);
+            this.applyDiffDecorations(editor, diff);
 
-        // 4. 清除 pending
-        this.pendingWrites.delete(filePath);
-
-        return true;
+            this.pendingWrites.delete(filePath);
+            return true;
+        } catch (error) {
+            console.error(`Failed to apply write to ${filePath}:`, error);
+            return false;
+        }
     }
 
     /**
@@ -177,25 +88,9 @@ export class ToolExecutor {
      */
     async applyAllPending(): Promise<string[]> {
         const applied: string[] = [];
-        const entries = Array.from(this.pendingWrites.entries());
-        for (const [filePath, pending] of entries) {
-            const success = await this.fs.writeFile(filePath, pending.newContent);
-            if (success) {
-                applied.push(filePath);
-                // 打开并高亮
-                const root = this.fs.getWorkspaceRoot();
-                if (root) {
-                    const absolutePath = filePath.startsWith('/') ? filePath : `${root}/${filePath}`;
-                    const uri = vscode.Uri.file(absolutePath);
-                    const doc = await vscode.workspace.openTextDocument(uri);
-                    const editor = await vscode.window.showTextDocument(doc, { preview: false });
-                    const diff = generateDiff(pending.oldContent, pending.newContent, filePath);
-                    this.applyDiffDecorations(editor, diff);
-                }
-            }
-        }
-        for (const f of applied) {
-            this.pendingWrites.delete(f);
+        for (const [filePath] of Array.from(this.pendingWrites.entries())) {
+            const success = await this.applyPendingWrite(filePath);
+            if (success) applied.push(filePath);
         }
         return applied;
     }
@@ -207,87 +102,19 @@ export class ToolExecutor {
         this.decorationManager.clearAllDecorations();
     }
 
-    // --- 内部执行 ---
+    // ── 内部方法 ──
 
-    private async executeReadFile(filePath: string): Promise<ToolResult> {
-        const file = await this.fs.readFile(filePath);
-        if (!file) {
-            return { type: 'read_file', success: false, data: `File not found: ${filePath}` };
+    private readFileSync(filePath: string): string {
+        const root = this.fs.getWorkspaceRoot();
+        if (!root) return '';
+        const absolutePath = filePath.startsWith('/') ? filePath : path.join(root, filePath);
+        try {
+            return fs.readFileSync(absolutePath, 'utf-8');
+        } catch {
+            return '';
         }
-
-        const lines = file.content.split('\n');
-        const numbered = lines.map((l, i) => `${i + 1} | ${l}`).join('\n');
-        return {
-            type: 'read_file',
-            success: true,
-            data: `File: ${file.relativePath} (${file.language}, ${file.lineCount} lines)\n\`\`\`${file.language}\n${numbered}\n\`\`\``
-        };
     }
 
-    private async executeWriteFile(filePath: string, content: string, reason: string): Promise<ToolResult> {
-        if (!this.modeManager.canWriteFiles()) {
-            return { type: 'write_file', success: false, data: 'Write not allowed in current mode. Switch to Agent mode.' };
-        }
-
-        const oldFile = await this.fs.readFile(filePath);
-        const oldContent = oldFile?.content || '';
-        const diff = generateDiff(oldContent, content, filePath);
-
-        // 存入待确认队列
-        this.pendingWrites.set(filePath, { oldContent, newContent: content, reason });
-
-        return {
-            type: 'write_file',
-            success: true,
-            data: `Pending write to ${filePath} (+${diff.additions} -${diff.deletions}). Awaiting confirmation.`,
-            diff
-        };
-    }
-
-    private async executeListFiles(): Promise<ToolResult> {
-        const tree = await this.fs.getFileTree();
-        return { type: 'list_files', success: true, data: tree };
-    }
-
-    private async executeSearchFiles(query: string): Promise<ToolResult> {
-        const files = await this.fs.scanWorkspace();
-        const matches = files
-            .filter(f => f.relativePath.toLowerCase().includes(query.toLowerCase()))
-            .map(f => f.relativePath)
-            .slice(0, 20);
-
-        return {
-            type: 'search_files',
-            success: true,
-            data: matches.length > 0 ? matches.join('\n') : 'No files matched.'
-        };
-    }
-
-    private async executeGetEditor(): Promise<ToolResult> {
-        const editor = this.fs.getActiveEditor();
-        if (!editor) {
-            return { type: 'get_editor', success: false, data: 'No active editor' };
-        }
-
-        const selectedText = this.fs.getSelectedText();
-        let data = `File: ${editor.relativePath} (${editor.language}, ${editor.lineCount} lines)`;
-
-        if (selectedText) {
-            data += `\nSelected code:\n\`\`\`${editor.language}\n${selectedText}\n\`\`\``;
-        } else {
-            const lines = editor.content.split('\n');
-            const truncated = lines.length > 100;
-            const preview = lines.slice(0, 100).map((l, i) => `${i + 1} | ${l}`).join('\n');
-            data += `\n\`\`\`${editor.language}\n${preview}\n\`\`\``;
-            if (truncated) { data += `\n... (${lines.length - 100} more lines)`; }
-        }
-
-        return { type: 'get_editor', success: true, data };
-    }
-
-    /**
-     * 将 diff 转换为编辑器装饰
-     */
     private applyDiffDecorations(editor: vscode.TextEditor, diff: FileDiff): void {
         const addedLines: number[] = [];
         const removedLines: number[] = [];
@@ -299,13 +126,27 @@ export class ToolExecutor {
                 lineNum++;
             } else if (hunk.type === 'remove') {
                 removedLines.push(lineNum);
-                // remove 行不增加 lineNum（已从文件中删除）
             } else {
                 lineNum++;
             }
         }
 
-        const uri = editor.document.uri;
-        this.decorationManager.highlightDiff(uri, addedLines, removedLines);
+        this.decorationManager.highlightDiff(editor.document.uri, addedLines, removedLines);
     }
+}
+
+// 导出类型供外部使用
+export interface ToolCall {
+    type: string;
+    path?: string;
+    content?: string;
+    query?: string;
+    reason?: string;
+}
+
+export interface ToolResult {
+    type: string;
+    success: boolean;
+    data: string;
+    diff?: FileDiff;
 }

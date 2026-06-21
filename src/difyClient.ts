@@ -542,32 +542,34 @@ export class DifyClient {
 
                 res.on('data', (chunk) => {
                     buffer += chunk.toString();
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
+                    const events = buffer.split('\n\n');
+                    buffer = events.pop() || '';
 
-                    for (const line of lines) {
-                        if (!line.startsWith('data: ')) continue;
+                    for (const event of events) {
+                        for (const line of event.split('\n')) {
+                            if (!line.startsWith('data: ')) continue;
 
-                        try {
-                            const data = JSON.parse(line.slice(6));
+                            try {
+                                const data = JSON.parse(line.slice(6));
 
-                            if (data.event === 'message' && data.answer) {
-                                handlers.onMessage(data.answer, data.metadata);
-                            }
+                                if (data.event === 'message' && data.answer) {
+                                    handlers.onMessage(data.answer, data.metadata);
+                                }
 
-                            if (data.event === 'agent_thought' && handlers.onAgentThought) {
-                                handlers.onAgentThought({
-                                    thought: data.thought || '',
-                                    tool: data.tool || undefined,
-                                    tool_input: data.tool_input || undefined,
-                                    tool_call_id: data.tool_call_id || undefined
-                                });
-                            }
+                                if (data.event === 'agent_thought' && handlers.onAgentThought) {
+                                    handlers.onAgentThought({
+                                        thought: data.thought || '',
+                                        tool: data.tool || undefined,
+                                        tool_input: data.tool_input || undefined,
+                                        tool_call_id: data.tool_call_id || undefined
+                                    });
+                                }
 
-                            if (data.conversation_id) {
-                                this.conversationId = data.conversation_id;
-                            }
-                        } catch { /* skip invalid JSON */ }
+                                if (data.conversation_id) {
+                                    this.conversationId = data.conversation_id;
+                                }
+                            } catch { /* skip invalid JSON */ }
+                        }
                     }
                 });
 
