@@ -1,0 +1,560 @@
+app:
+  description: 代码审查 Workflow - 自动分析代码质量、安全性和性能
+  mode: workflow
+  name: 代码审查
+
+workflow:
+  features:
+    file_upload:
+      allowed_file_extensions:
+        - .py
+        - .js
+        - .ts
+        - .jsx
+        - .tsx
+        - .java
+        - .go
+        - .rs
+      allowed_file_types:
+        - document
+      allowed_file_upload_methods:
+        - local_file
+        - remote_url
+      enabled: true
+      fileUploadConfig:
+        file_size_limit: 15
+      image:
+        enabled: false
+      number_limits: 5
+
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: classifier
+        id: start-to-classifier
+        source: start
+        sourceHandle: source
+        target: classifier-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: classifier
+          targetType: llm
+          targetHandle: target
+        id: classifier-to-bug
+        source: classifier-node
+        sourceHandle: bug
+        target: bug-detection
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: classifier
+          targetType: llm
+          targetHandle: target
+        id: classifier-to-performance
+        source: classifier-node
+        sourceHandle: performance
+        target: performance-optimization
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: classifier
+          targetType: llm
+          targetHandle: target
+        id: classifier-to-security
+        source: classifier-node
+        sourceHandle: security
+        target: security-check
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: classifier
+          targetType: llm
+          targetHandle: target
+        id: classifier-to-general
+        source: classifier-node
+        sourceHandle: general
+        target: general-review
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: bug-to-end
+        source: bug-detection
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: performance-to-end
+        source: performance-optimization
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: security-to-end
+        source: security-check
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: general-to-end
+        source: general-review
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+    nodes:
+      - data:
+          desc: 开始节点
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 代码内容
+              max_length: 20000
+              options: []
+              required: true
+              type: paragraph
+              variable: code_content
+
+            - label: 语言类型
+              max_length: 50
+              options:
+                - Python
+                - JavaScript
+                - TypeScript
+                - Java
+                - Go
+                - Rust
+              required: true
+              type: select
+              variable: language
+
+            - label: 审查类型
+              max_length: 50
+              options:
+                - Bug检测
+                - 性能优化
+                - 安全检查
+                - 全面审查
+              required: false
+              type: select
+              variable: review_type
+
+        height: 118
+        id: start
+        position:
+          x: 80
+          y: 282
+        positionAbsolute:
+          x: 80
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          desc: 问题分类
+          instruction: ''
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 500
+              presence_penalty: 0
+              temperature: 0.1
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          classes:
+            - id: bug
+              name: Bug检测
+              description: 检测代码中的潜在 Bug 和错误
+            - id: performance
+              name: 性能优化
+              description: 分析代码性能瓶颈和优化建议
+            - id: security
+              name: 安全检查
+              description: 检测代码安全漏洞和风险
+            - id: general
+              name: 全面审查
+              description: 综合审查代码质量
+          selected: false
+          title: 问题分类
+          type: question-classifier
+          advanced:
+            model:
+              completion_params:
+                frequency_penalty: 0
+                max_tokens: 500
+                presence_penalty: 0
+                temperature: 0.1
+                top_p: 1
+              mode: chat
+              name: deepseek-chat
+              provider: deepseek
+
+        height: 150
+        id: classifier-node
+        position:
+          x: 400
+          y: 282
+        positionAbsolute:
+          x: 400
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: Bug检测
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 3000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的代码审查专家，专注于 Bug 检测。
+
+                审查要点：
+                1. 空指针/未定义引用
+                2. 边界条件处理
+                3. 类型错误
+                4. 逻辑错误
+                5. 异常处理
+                6. 并发问题
+                7. 资源泄漏
+
+                输出格式：
+                ## Bug 检测报告
+
+                ### 发现的问题
+                [问题列表，每个问题包含：位置、描述、严重程度、修复建议]
+
+                ### 总结
+                [整体评估和建议]
+
+            - id: user-prompt
+              role: user
+              text: |
+                语言：{{#start.language#}}
+
+                代码：
+                ```{{#start.language#}}
+                {{#start.code_content#}}
+                ```
+
+                请进行 Bug 检测：
+          selected: false
+          title: Bug检测
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: bug-detection
+        position:
+          x: 720
+          y: 100
+        positionAbsolute:
+          x: 720
+          y: 100
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 性能优化
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 3000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的代码性能优化专家。
+
+                审查要点：
+                1. 时间复杂度分析
+                2. 空间复杂度分析
+                3. 循环优化
+                4. 数据结构选择
+                5. 缓存策略
+                6. 并发优化
+                7. 内存管理
+
+                输出格式：
+                ## 性能优化报告
+
+                ### 性能分析
+                [代码性能分析]
+
+                ### 优化建议
+                [具体优化建议，包含代码示例]
+
+                ### 预期收益
+                [优化后的预期性能提升]
+
+            - id: user-prompt
+              role: user
+              text: |
+                语言：{{#start.language#}}
+
+                代码：
+                ```{{#start.language#}}
+                {{#start.code_content#}}
+                ```
+
+                请进行性能优化分析：
+          selected: false
+          title: 性能优化
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: performance-optimization
+        position:
+          x: 720
+          y: 250
+        positionAbsolute:
+          x: 720
+          y: 250
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 安全检查
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 3000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的代码安全审查专家。
+
+                审查要点：
+                1. SQL注入
+                2. XSS攻击
+                3. CSRF攻击
+                4. 路径遍历
+                5. 敏感信息泄露
+                6. 权限控制
+                7. 输入验证
+                8. 加密安全
+
+                输出格式：
+                ## 安全检查报告
+
+                ### 发现的漏洞
+                [漏洞列表，每个漏洞包含：类型、位置、严重程度、修复建议]
+
+                ### 安全评分
+                [1-10分的安全评分]
+
+                ### 修复建议
+                [具体的修复方案]
+
+            - id: user-prompt
+              role: user
+              text: |
+                语言：{{#start.language#}}
+
+                代码：
+                ```{{#start.language#}}
+                {{#start.code_content#}}
+                ```
+
+                请进行安全检查：
+          selected: false
+          title: 安全检查
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: security-check
+        position:
+          x: 720
+          y: 400
+        positionAbsolute:
+          x: 720
+          y: 400
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: false
+            variable_selector: []
+          desc: 全面审查
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 4000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个全面的代码审查专家。
+
+                审查维度：
+                1. 代码质量
+                   - 可读性
+                   - 可维护性
+                   - 代码规范
+                2. 功能正确性
+                   - Bug检测
+                   - 边界条件
+                3. 性能
+                   - 时间复杂度
+                   - 空间复杂度
+                4. 安全性
+                   - 漏洞检测
+                   - 最佳实践
+
+                输出格式：
+                ## 代码审查报告
+
+                ### 代码质量评分
+                [1-10分]
+
+                ### 详细分析
+                [按维度分析]
+
+                ### 问题列表
+                [问题详情]
+
+                ### 改进建议
+                [具体建议]
+
+            - id: user-prompt
+              role: user
+              text: |
+                语言：{{#start.language#}}
+
+                代码：
+                ```{{#start.language#}}
+                {{#start.code_content#}}
+                ```
+
+                请进行全面代码审查：
+          selected: false
+          title: 全面审查
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: general-review
+        position:
+          x: 720
+          y: 550
+        positionAbsolute:
+          x: 720
+          y: 550
+        type: custom
+        width: 244
+
+      - data:
+          desc: 输出结果
+          outputs:
+            - value_selector:
+                - bug-detection
+                - text
+              variable: bug_report
+            - value_selector:
+                - performance-optimization
+                - text
+              variable: performance_report
+            - value_selector:
+                - security-check
+                - text
+              variable: security_report
+            - value_selector:
+                - general-review
+                - text
+              variable: general_report
+          selected: false
+          title: 结束
+          type: end
+
+        height: 90
+        id: end-node
+        position:
+          x: 1040
+          y: 282
+        positionAbsolute:
+          x: 1040
+          y: 282
+        type: custom
+        width: 244
+
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1
