@@ -570,6 +570,62 @@ ${modeSuffix}`;
                 return `之前的对话摘要:\n${summary}\n请继续。`;
             }
         });
+
+        // 知识库查询命令
+        this._slashCommands.set('knowledge', {
+            description: '查询知识库',
+            handler: async (args) => {
+                if (!args.trim()) return '用法: /knowledge <查询内容>';
+                try {
+                    const result = await this._client.queryKnowledge(args.trim());
+                    return result.answer || '未找到相关知识';
+                } catch (error: any) {
+                    return `查询失败: ${error.message}`;
+                }
+            }
+        });
+
+        this._slashCommands.set('api', {
+            description: '查询 API 文档',
+            handler: async (args) => {
+                if (!args.trim()) return '用法: /api <API名称>';
+                try {
+                    const editor = vscode.window.activeTextEditor;
+                    const language = editor?.document.languageId || 'unknown';
+                    const result = await this._client.queryApiDoc(args.trim(), language);
+                    return result || '未找到 API 文档';
+                } catch (error: any) {
+                    return `查询失败: ${error.message}`;
+                }
+            }
+        });
+
+        this._slashCommands.set('arch', {
+            description: '查询项目架构',
+            handler: async () => {
+                try {
+                    const result = await this._client.queryArchitecture();
+                    return result || '未找到架构信息';
+                } catch (error: any) {
+                    return `查询失败: ${error.message}`;
+                }
+            }
+        });
+
+        this._slashCommands.set('best', {
+            description: '查询最佳实践',
+            handler: async (args) => {
+                if (!args.trim()) return '用法: /best <主题>';
+                try {
+                    const editor = vscode.window.activeTextEditor;
+                    const language = editor?.document.languageId || 'unknown';
+                    const result = await this._client.queryBestPractices(args.trim(), language);
+                    return result || '未找到最佳实践';
+                } catch (error: any) {
+                    return `查询失败: ${error.message}`;
+                }
+            }
+        });
     }
 
     private async _handleSlashCommand(text: string): Promise<void> {
