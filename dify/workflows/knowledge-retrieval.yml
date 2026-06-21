@@ -1,0 +1,267 @@
+app:
+  description: 知识检索 Workflow - RAG 检索增强生成
+  mode: workflow
+  name: 知识检索
+
+workflow:
+  features:
+    file_upload:
+      allowed_file_extensions:
+        - .md
+        - .txt
+        - .json
+        - .py
+        - .js
+        - .ts
+      allowed_file_types:
+        - document
+      allowed_file_upload_methods:
+        - local_file
+        - remote_url
+      enabled: true
+      fileUploadConfig:
+        file_size_limit: 15
+      image:
+        enabled: false
+      number_limits: 5
+
+  graph:
+    edges:
+      - data:
+          isInIteration: false
+          sourceType: start
+          targetType: knowledge-retrieval
+        id: start-to-retrieval
+        source: start
+        sourceHandle: source
+        target: retrieval-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: knowledge-retrieval
+          targetType: llm
+        id: retrieval-to-llm
+        source: retrieval-node
+        sourceHandle: source
+        target: llm-node
+        targetHandle: target
+        type: custom
+
+      - data:
+          isInIteration: false
+          sourceType: llm
+          targetType: end
+        id: llm-to-end
+        source: llm-node
+        sourceHandle: source
+        target: end-node
+        targetHandle: target
+        type: custom
+
+    nodes:
+      - data:
+          desc: 开始节点
+          selected: false
+          title: 开始
+          type: start
+          variables:
+            - label: 查询内容
+              max_length: 5000
+              options: []
+              required: true
+              type: paragraph
+              variable: query
+
+            - label: 项目上下文
+              max_length: 10000
+              options: []
+              required: false
+              type: paragraph
+              variable: project_context
+
+            - label: 语言类型
+              max_length: 50
+              options:
+                - Python
+                - JavaScript
+                - TypeScript
+                - Java
+                - Go
+                - Rust
+                - 其他
+              required: false
+              type: select
+              variable: language
+
+            - label: 查询类型
+              max_length: 50
+              options:
+                - 代码补全
+                - 代码审查
+                - API 查询
+                - 架构查询
+                - 最佳实践
+                - 问题解答
+              required: false
+              type: select
+              variable: query_type
+
+        height: 118
+        id: start
+        position:
+          x: 80
+          y: 282
+        positionAbsolute:
+          x: 80
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          dataset_ids:
+            - ${PROJECT_DOCS_DATASET_ID}
+            - ${CODEBASE_DATASET_ID}
+            - ${BEST_PRACTICES_DATASET_ID}
+          desc: 知识库检索
+          multiple_retrieval_config:
+            reranking_enable: true
+            reranking_mode: reranking_model
+            reranking_model:
+              model:
+                name: bge-reranker-v2-m3
+                provider: huggingface
+            score_threshold_enabled: true
+            top_k: 5
+          query_variable_selector:
+            - start
+            - query
+          retrieval_mode: multiple
+          score_threshold:
+            enabled: true
+            score: 0.7
+          selected: false
+          title: 知识检索
+          type: knowledge-retrieval
+
+        height: 150
+        id: retrieval-node
+        position:
+          x: 400
+          y: 282
+        positionAbsolute:
+          x: 400
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          context:
+            enabled: true
+            variable_selector:
+              - retrieval-node
+              - result
+          desc: LLM 生成回答
+          model:
+            completion_params:
+              frequency_penalty: 0
+              max_tokens: 4000
+              presence_penalty: 0
+              temperature: 0.3
+              top_p: 1
+            mode: chat
+            name: deepseek-chat
+            provider: deepseek
+          prompt_template:
+            - id: system-prompt
+              role: system
+              text: |
+                你是一个专业的编程助手，基于检索到的知识库内容回答用户问题。
+
+                回答规则：
+                1. **基于检索内容**：优先使用检索到的内容回答
+                2. **补充说明**：如果检索内容不足，可以补充说明
+                3. **代码示例**：提供具体的代码示例
+                4. **简洁明了**：保持回答简洁，避免冗余
+                5. **格式规范**：使用 Markdown 格式，代码块标注语言
+
+                输出格式：
+                ## 回答
+
+                [基于检索内容的回答]
+
+                ## 代码示例
+
+                ```[语言]
+                [代码示例]
+                ```
+
+                ## 参考文档
+
+                [引用的文档链接]
+
+            - id: user-prompt
+              role: user
+              text: |
+                查询类型：{{#start.query_type#}}
+                语言：{{#start.language#}}
+
+                查询内容：
+                {{#start.query#}}
+
+                项目上下文：
+                {{#start.project_context#}}
+
+                检索到的知识库内容：
+                {{#context#}}
+
+                请基于以上内容回答：
+          selected: false
+          title: LLM 生成
+          type: llm
+          variables: []
+          vision:
+            enabled: false
+
+        height: 98
+        id: llm-node
+        position:
+          x: 720
+          y: 282
+        positionAbsolute:
+          x: 720
+          y: 282
+        type: custom
+        width: 244
+
+      - data:
+          desc: 输出结果
+          outputs:
+            - value_selector:
+                - llm-node
+                - text
+              variable: answer
+            - value_selector:
+                - retrieval-node
+                - result
+              variable: references
+          selected: false
+          title: 结束
+          type: end
+
+        height: 90
+        id: end-node
+        position:
+          x: 1040
+          y: 282
+        positionAbsolute:
+          x: 1040
+          y: 282
+        type: custom
+        width: 244
+
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1

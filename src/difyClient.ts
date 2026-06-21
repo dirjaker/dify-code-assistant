@@ -277,6 +277,124 @@ export class DifyClient {
     }
 
     /**
+     * 查询知识库
+     */
+    async queryKnowledge(
+        query: string,
+        context?: {
+            language?: string;
+            queryType?: string;
+            projectContext?: string;
+        }
+    ): Promise<ChatResponse> {
+        const url = new URL(`${this.config.apiUrl}/v1/workflows/run`);
+
+        const body: any = {
+            inputs: {
+                query: query,
+                language: context?.language || 'unknown',
+                query_type: context?.queryType || '问题解答',
+                project_context: context?.projectContext || ''
+            },
+            response_mode: 'blocking',
+            user: 'vscode-user'
+        };
+
+        const response = await this.request(url, body);
+
+        return {
+            answer: response.data?.outputs?.answer || '',
+            conversationId: '',
+            messageId: '',
+            toolCalls: []
+        };
+    }
+
+    /**
+     * 查询代码补全（带 RAG）
+     */
+    async queryCodeCompletion(
+        codeContext: string,
+        language: string,
+        completionType: string
+    ): Promise<string> {
+        const response = await this.queryKnowledge(
+            `请补全以下 ${language} 代码`,
+            {
+                language,
+                queryType: '代码补全',
+                projectContext: `代码上下文：\n${codeContext}\n补全类型：${completionType}`
+            }
+        );
+
+        return response.answer;
+    }
+
+    /**
+     * 查询代码审查（带 RAG）
+     */
+    async queryCodeReview(
+        codeContent: string,
+        language: string,
+        reviewType: string
+    ): Promise<string> {
+        const response = await this.queryKnowledge(
+            `请审查以下 ${language} 代码`,
+            {
+                language,
+                queryType: '代码审查',
+                projectContext: `代码内容：\n${codeContent}\n审查类型：${reviewType}`
+            }
+        );
+
+        return response.answer;
+    }
+
+    /**
+     * 查询 API 文档
+     */
+    async queryApiDoc(apiName: string, language: string): Promise<string> {
+        const response = await this.queryKnowledge(
+            `请提供 ${apiName} 的 API 文档和使用示例`,
+            {
+                language,
+                queryType: 'API 查询'
+            }
+        );
+
+        return response.answer;
+    }
+
+    /**
+     * 查询项目架构
+     */
+    async queryArchitecture(): Promise<string> {
+        const response = await this.queryKnowledge(
+            '请描述这个项目的整体架构和模块划分',
+            {
+                queryType: '架构查询'
+            }
+        );
+
+        return response.answer;
+    }
+
+    /**
+     * 查询最佳实践
+     */
+    async queryBestPractices(topic: string, language: string): Promise<string> {
+        const response = await this.queryKnowledge(
+            `请提供关于 ${topic} 的最佳实践`,
+            {
+                language,
+                queryType: '最佳实践'
+            }
+        );
+
+        return response.answer;
+    }
+
+    /**
      * 发送聊天消息（blocking 模式）
      */
     async chat(query: string, systemPrompt?: string): Promise<ChatResponse> {
