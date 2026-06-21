@@ -394,6 +394,8 @@
         if (!detectAtMention()) {
             detectSlashCommand();
         }
+        inputEl.style.height = 'auto';
+        inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
     });
 
     inputEl.addEventListener('keydown', function(e) {
@@ -881,6 +883,7 @@
 
         vscode.postMessage({ command: 'sendMessage', text: text });
         inputEl.value = '';
+        inputEl.style.height = 'auto';
         focusInput();
     }
 
@@ -962,7 +965,17 @@
         var msg = event.data;
         switch (msg.command) {
             case 'receiveMessage':
-                appendStep(msg.text, msg.role);
+                if (msg.role === 'error') {
+                    var errorText = msg.text || '';
+                    if (errorText.indexOf('ECONNREFUSED') !== -1 || errorText.indexOf('fetch failed') !== -1) {
+                        errorText += '\n\n连接失败，请检查：\n1. dify.apiUrl 是否正确（不要加 /v1）\n2. Dify 服务是否运行中\n3. 网络是否可达';
+                    } else if (errorText.indexOf('401') !== -1 || errorText.indexOf('Unauthorized') !== -1) {
+                        errorText += '\n\n认证失败，请检查 dify.apiKey 是否正确（格式：app-xxx）';
+                    }
+                    appendStep(errorText, 'error');
+                } else {
+                    appendStep(msg.text, msg.role);
+                }
                 break;
             case 'startStream':
                 startStream();
