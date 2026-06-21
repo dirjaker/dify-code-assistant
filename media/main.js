@@ -14,9 +14,18 @@
     const modeLabelEl = document.getElementById('modeLabel');
     const tabListEl = document.getElementById('tabList');
     const tabNewBtn = document.getElementById('tabNewBtn');
+    const modeDropdownEl = document.getElementById('modeDropdown');
+    const modeTriggerEl = document.getElementById('modeTrigger');
+    const currentModeTextEl = document.getElementById('currentModeText');
+    const modeMenuEl = document.getElementById('modeMenu');
 
-    var currentMode = 'ask';
+    var currentMode = 'agent';
     const modes = ['ask', 'plan', 'agent'];
+    const modeInfo = {
+        ask: { icon: '💬', title: 'Ask', desc: 'Ask questions about your code' },
+        plan: { icon: '📋', title: 'Plan', desc: 'Plan and architect solutions' },
+        agent: { icon: '🤖', title: 'Agent', desc: 'Autonomous coding with tools' }
+    };
 
     // ═══════════════════════════════════════
     // Tab Management
@@ -135,9 +144,9 @@
             { pattern: /(\w+)(?=\s*\()/g, cls: 'syn-func' }
         ],
         html: [
-            { pattern: /(&lt;!--[\s\S]*?--&gt;)/g, cls: 'syn-comment' },
+            { pattern: /(<!--[\s\S]*?-->)/g, cls: 'syn-comment' },
             { pattern: /("[^"]*"|'[^']*')/g, cls: 'syn-string' },
-            { pattern: /(&lt;\/?)([\w-]+)/g, repl: '$1<span class="syn-tag">$2</span>' },
+            { pattern: /(<\/?)([\w-]+)/g, repl: '$1<span class="syn-tag">$2</span>' },
             { pattern: /(\b\w+)(?==)/g, cls: 'syn-attr' }
         ],
         css: [
@@ -159,60 +168,153 @@
     syntaxRules.sql = syntaxRules.python;
 
     // ═══════════════════════════════════════
-    // Mode Switcher — Continue 风格
+    // Mode Dropdown — Premium Design
     // ═══════════════════════════════════════
+
+    function initModeDropdown() {
+        if (!modeDropdownEl || !modeMenuEl) return;
+
+        // Render mode options
+        renderModeMenu();
+
+        // Toggle dropdown
+        if (modeTriggerEl) {
+            modeTriggerEl.addEventListener('click', function(e) {
+                e.stopPropagation();
+                toggleModeDropdown();
+            });
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!modeDropdownEl.contains(e.target)) {
+                closeModeDropdown();
+            }
+        });
+
+        // Keyboard shortcut Ctrl+. to cycle modes
+        document.addEventListener('keydown', function(e) {
+            if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+                e.preventDefault();
+                var idx = modes.indexOf(currentMode);
+                setMode(modes[(idx + 1) % modes.length]);
+                focusInput();
+            }
+        });
+    }
+
+    function renderModeMenu() {
+        if (!modeMenuEl) return;
+        modeMenuEl.innerHTML = '';
+
+        // Header
+        var header = document.createElement('div');
+        header.className = 'mode-menu-header';
+        header.textContent = 'Mode';
+        modeMenuEl.appendChild(header);
+
+        // Options
+        modes.forEach(function(mode) {
+            var info = modeInfo[mode];
+            var option = document.createElement('div');
+            option.className = 'mode-option' + (mode === currentMode ? ' active' : '');
+            option.setAttribute('data-mode', mode);
+
+            var icon = document.createElement('div');
+            icon.className = 'mode-option-icon';
+            icon.textContent = info.icon;
+
+            var content = document.createElement('div');
+            content.className = 'mode-option-content';
+
+            var title = document.createElement('div');
+            title.className = 'mode-option-title';
+            title.textContent = info.title;
+
+            var desc = document.createElement('div');
+            desc.className = 'mode-option-desc';
+            desc.textContent = info.desc;
+
+            content.appendChild(title);
+            content.appendChild(desc);
+
+            var check = document.createElement('div');
+            check.className = 'mode-option-check';
+            check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>';
+
+            option.appendChild(icon);
+            option.appendChild(content);
+            option.appendChild(check);
+
+            option.addEventListener('click', function() {
+                setMode(mode);
+                closeModeDropdown();
+                focusInput();
+            });
+
+            modeMenuEl.appendChild(option);
+        });
+    }
+
+    function toggleModeDropdown() {
+        if (!modeDropdownEl) return;
+        var isOpen = modeDropdownEl.classList.contains('open');
+        if (isOpen) {
+            closeModeDropdown();
+        } else {
+            openModeDropdown();
+        }
+    }
+
+    function openModeDropdown() {
+        if (!modeDropdownEl) return;
+        modeDropdownEl.classList.add('open');
+    }
+
+    function closeModeDropdown() {
+        if (!modeDropdownEl) return;
+        modeDropdownEl.classList.remove('open');
+    }
 
     function setMode(mode) {
         if (mode === currentMode) return;
         currentMode = mode;
 
-        // Batch all DOM reads/writes to prevent layout thrashing
-        // 1. Toggle button classes
-        var prev = document.querySelector('.mode-btn.active');
-        var next = document.querySelector('.mode-btn[data-mode="' + mode + '"]');
+        // Update trigger text
+        if (currentModeTextEl) {
+            var info = modeInfo[mode];
+            currentModeTextEl.textContent = info.title;
+        }
 
-        // 2. Prepare text updates
-        var placeholders = { ask: 'Ask anything...', plan: 'Describe your task...', agent: 'Tell me what to build...' };
-        var labels = { ask: 'Ask mode', plan: 'Plan mode', agent: 'Agent mode' };
+        // Update active state in menu
+        if (modeMenuEl) {
+            modeMenuEl.querySelectorAll('.mode-option').forEach(function(opt) {
+                var optMode = opt.getAttribute('data-mode');
+                opt.classList.toggle('active', optMode === mode);
+            });
+        }
 
-        // 3. Single batched write — all DOM changes in one frame
-        if (prev && prev !== next) prev.classList.remove('active');
-        if (next) next.classList.add('active');
-        inputEl.placeholder = placeholders[mode] || 'Ask anything...';
-        if (modeLabelEl) modeLabelEl.textContent = labels[mode] || '';
+        // Update placeholder
+        var placeholders = {
+            ask: 'Ask anything... (type @ for files, / for commands)',
+            plan: 'Describe your task... (type @ for files, / for commands)',
+            agent: 'Tell me what to build... (type @ for files, / for commands)'
+        };
+        if (inputEl) {
+            inputEl.placeholder = placeholders[mode] || placeholders.ask;
+        }
 
+        // Update mode label
+        if (modeLabelEl) {
+            modeLabelEl.textContent = modeInfo[mode].title + ' mode';
+        }
+
+        // Notify extension
         vscode.postMessage({ command: 'setMode', mode: mode });
     }
 
-    document.querySelectorAll('.mode-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var mode = this.getAttribute('data-mode');
-            if (mode && mode !== currentMode) { setMode(mode); focusInput(); }
-        });
-    });
-
-    // Ctrl+. 循环模式
-    document.addEventListener('keydown', function(e) {
-        if ((e.metaKey || e.ctrlKey) && e.key === '.') {
-            e.preventDefault();
-            var idx = modes.indexOf(currentMode);
-            setMode(modes[(idx + 1) % modes.length]);
-            focusInput();
-        }
-    });
-
-    // Ctrl+@ 触发文件搜索
-    document.addEventListener('keydown', function(e) {
-        if ((e.metaKey || e.ctrlKey) && e.key === '@') {
-            e.preventDefault();
-            var cursorPos = inputEl.selectionStart;
-            var val = inputEl.value;
-            inputEl.value = val.substring(0, cursorPos) + '@' + val.substring(cursorPos);
-            inputEl.setSelectionRange(cursorPos + 1, cursorPos + 1);
-            focusInput();
-            detectAtMention();
-        }
-    });
+    // Initialize mode dropdown
+    initModeDropdown();
 
     // ═══════════════════════════════════════
     // @File Autocomplete
@@ -241,28 +343,34 @@
             var item = document.createElement('div');
             item.className = 'file-dropdown-item';
             var sizeStr = r.size > 1024 ? Math.round(r.size / 1024) + 'KB' : r.size + 'B';
-            item.innerHTML = '<span class="file-icon">' + escapeHtml(r.icon) + '</span>' +
-                '<span class="file-path">' + escapeHtml(r.path) + '</span>' +
-                '<span class="file-size">' + sizeStr + '</span>';
+            item.innerHTML = '<span class="file-dropdown-icon">' + escapeHtml(r.icon) + '</span>' +
+                '<span class="file-dropdown-path">' + escapeHtml(r.path) + '</span>' +
+                '<span class="file-dropdown-size">' + sizeStr + '</span>';
             item.addEventListener('click', function() { selectFile(i); });
             item.addEventListener('mouseenter', function() { highlightFileItem(i); });
             fileDropdown.appendChild(item);
         });
         fileDropdown.style.display = 'block';
+        fileDropdown.classList.add('visible');
         isFileDropdownOpen = true;
     }
 
     function closeFileDropdown() {
-        fileDropdown.style.display = 'none';
+        if (fileDropdown) {
+            fileDropdown.style.display = 'none';
+            fileDropdown.classList.remove('visible');
+        }
         isFileDropdownOpen = false;
         fileDropdownIndex = -1;
     }
 
     function highlightFileItem(idx) {
         fileDropdownIndex = idx;
-        fileDropdown.querySelectorAll('.file-dropdown-item').forEach(function(el, i) {
-            el.classList.toggle('active', i === idx);
-        });
+        if (fileDropdown) {
+            fileDropdown.querySelectorAll('.file-dropdown-item').forEach(function(el, i) {
+                el.classList.toggle('selected', i === idx);
+            });
+        }
     }
 
     function selectFile(idx) {
@@ -354,27 +462,33 @@
         cmds.forEach(function(cmd, i) {
             var item = document.createElement('div');
             item.className = 'slash-dropdown-item';
-            item.innerHTML = '<span class="slash-cmd">/' + escapeHtml(cmd.name) + '</span>' +
-                '<span class="slash-desc">' + escapeHtml(cmd.description) + '</span>';
+            item.innerHTML = '<span class="slash-dropdown-name">/' + escapeHtml(cmd.name) + '</span>' +
+                '<span class="slash-dropdown-desc">' + escapeHtml(cmd.description) + '</span>';
             item.addEventListener('click', function() { selectSlashCommand(i, cmd); });
             item.addEventListener('mouseenter', function() { highlightSlashItem(i); });
             slashDropdown.appendChild(item);
         });
         slashDropdown.style.display = 'block';
+        slashDropdown.classList.add('visible');
         isSlashDropdownOpen = true;
     }
 
     function closeSlashDropdown() {
-        slashDropdown.style.display = 'none';
+        if (slashDropdown) {
+            slashDropdown.style.display = 'none';
+            slashDropdown.classList.remove('visible');
+        }
         isSlashDropdownOpen = false;
         slashDropdownIndex = -1;
     }
 
     function highlightSlashItem(idx) {
         slashDropdownIndex = idx;
-        slashDropdown.querySelectorAll('.slash-dropdown-item').forEach(function(el, i) {
-            el.classList.toggle('active', i === idx);
-        });
+        if (slashDropdown) {
+            slashDropdown.querySelectorAll('.slash-dropdown-item').forEach(function(el, i) {
+                el.classList.toggle('selected', i === idx);
+            });
+        }
     }
 
     function selectSlashCommand(idx, cmd) {
@@ -399,118 +513,207 @@
         var rules = syntaxRules[lang] || syntaxRules[lang.split('-')[0]];
         if (!rules) return code;
 
-        var result = code;
-
+        var result = escapeHtml(code);
         rules.forEach(function(rule) {
             if (rule.repl) {
                 result = result.replace(rule.pattern, rule.repl);
             } else {
-                result = result.replace(rule.pattern, function(match) {
-                    // 跳过已包裹的 span 标签
-                    if (match.indexOf('<span') === 0) return match;
-                    // 转义 match 内容后包裹（防止 XSS）
-                    var safe = match.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    return '<span class="' + rule.cls + '">' + safe + '</span>';
-                });
+                result = result.replace(rule.pattern, '<span class="' + rule.cls + '">$1</span>');
             }
         });
-
         return result;
     }
 
     // ═══════════════════════════════════════
-    // Inline Edit
+    // Message Rendering
     // ═══════════════════════════════════════
 
-    function createInlineEditor(code, lang, filePath) {
-        var wrapper = document.createElement('div');
-        wrapper.className = 'inline-editor';
-
-        var header = document.createElement('div');
-        header.className = 'inline-editor-header';
-        header.innerHTML = '<span class="code-lang">' + escapeHtml(lang) + '</span>' +
-            (filePath ? '<span class="inline-file-path">' + escapeHtml(filePath) + '</span>' : '');
-
-        var textarea = document.createElement('textarea');
-        textarea.className = 'inline-editor-textarea';
-        textarea.value = code;
-        textarea.rows = Math.min(code.split('\n').length + 2, 20);
-
-        var actions = document.createElement('div');
-        actions.className = 'inline-editor-actions';
-
-        // Auto-resize textarea
-        textarea.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = Math.min(this.scrollHeight, 400) + 'px';
-        });
-
-        // Diff preview indicator
-        var diffBadge = document.createElement('span');
-        diffBadge.className = 'inline-diff-badge';
-        diffBadge.textContent = '';
-        header.appendChild(diffBadge);
-
-        textarea.addEventListener('input', function() {
-            var originalLines = code.split('\n').length;
-            var newLines = textarea.value.split('\n').length;
-            var diff = newLines - originalLines;
-            if (diff > 0) {
-                diffBadge.textContent = '+' + diff + ' lines';
-                diffBadge.className = 'inline-diff-badge add';
-            } else if (diff < 0) {
-                diffBadge.textContent = diff + ' lines';
-                diffBadge.className = 'inline-diff-badge del';
-            } else {
-                diffBadge.textContent = 'modified';
-                diffBadge.className = 'inline-diff-badge mod';
-            }
-        });
-
-        var applyBtn = document.createElement('button');
-        applyBtn.className = 'inline-btn apply';
-        applyBtn.textContent = 'Apply';
-        applyBtn.addEventListener('click', function() {
-            if (filePath) {
-                vscode.postMessage({ command: 'applyInlineEdit', filePath: filePath, newContent: textarea.value });
-            }
-        });
-
-        var cancelBtn = document.createElement('button');
-        cancelBtn.className = 'inline-btn cancel';
-        cancelBtn.textContent = 'Cancel';
-        cancelBtn.addEventListener('click', function() { wrapper.remove(); });
-
-        var copyBtn = document.createElement('button');
-        copyBtn.className = 'inline-btn';
-        copyBtn.textContent = 'Copy';
-        copyBtn.addEventListener('click', function() {
-            vscode.postMessage({ command: 'copyCode', code: textarea.value });
-            copyBtn.textContent = 'Copied';
-            setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
-        });
-
-        actions.appendChild(copyBtn);
-        actions.appendChild(cancelBtn);
-        actions.appendChild(applyBtn);
-
-        wrapper.appendChild(header);
-        wrapper.appendChild(textarea);
-        wrapper.appendChild(actions);
-        return wrapper;
-    }
-
-    // ═══════════════════════════════════════
-    // Terminal Result Display
-    // ═══════════════════════════════════════
-
+    var streamingStep = null;
+    var streamingContent = null;
+    var userScrolledUp = false;
     var lastTerminalCmd = '';
 
-    function showTerminalResult(stdout, stderr, exitCode) {
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function formatMarkdown(text) {
+        // Simple markdown rendering
+        var html = escapeHtml(text);
+
+        // Code blocks
+        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+            var highlighted = highlightSyntax(code.trim(), lang || 'text');
+            return '<pre><div class="code-bar"><span class="code-lang">' + (lang || 'code') + '</span>' +
+                '<div class="code-actions"><button class="code-action-btn copy-btn" title="Copy">Copy</button>' +
+                '<button class="code-action-btn run-btn run" title="Run">Run</button></div></div>' +
+                '<code>' + highlighted + '</code></pre>';
+        });
+
+        // Inline code
+        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+        // Bold
+        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+        // Italic
+        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+
+        // Links
+        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+
+        // Headers
+        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+
+        // Lists
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+
+        // Paragraphs
+        html = html.replace(/\n\n/g, '</p><p>');
+        html = '<p>' + html + '</p>';
+
+        return html;
+    }
+
+    function appendStep(text, role) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+        if (thinkingEl) thinkingEl.style.display = '';
+
+        var step = document.createElement('div');
+        step.className = 'step ' + role;
+
+        // Label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = role === 'user' ? 'You' : 'Dify Assistant';
+        step.appendChild(label);
+
+        // Content
+        var content = document.createElement('div');
+        content.className = 'step-content';
+        content.innerHTML = formatMarkdown(text);
+        step.appendChild(content);
+
+        // Actions
+        var actions = document.createElement('div');
+        actions.className = 'response-actions';
+        if (role === 'assistant') {
+            var copyBtn = document.createElement('button');
+            copyBtn.className = 'response-action-btn';
+            copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
+            copyBtn.addEventListener('click', function() {
+                vscode.postMessage({ command: 'copyCode', code: text });
+            });
+            actions.appendChild(copyBtn);
+        }
+        step.appendChild(actions);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    function startStream() {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+        if (thinkingEl) thinkingEl.style.display = '';
+
+        streamingStep = document.createElement('div');
+        streamingStep.className = 'step assistant';
+
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Dify Assistant';
+        streamingStep.appendChild(label);
+
+        streamingContent = document.createElement('div');
+        streamingContent.className = 'step-content';
+        streamingStep.appendChild(streamingContent);
+
+        var actions = document.createElement('div');
+        actions.className = 'response-actions';
+        streamingStep.appendChild(actions);
+
+        stepsArea.insertBefore(streamingStep, thinkingEl);
+    }
+
+    function appendStreamChunk(chunk) {
+        if (!streamingContent) return;
+        streamingContent.innerHTML += escapeHtml(chunk);
+        if (!userScrolledUp) scrollToBottom();
+    }
+
+    function endStream() {
+        if (streamingContent) {
+            var text = streamingContent.textContent;
+            streamingContent.innerHTML = formatMarkdown(text);
+
+            // Add action buttons
+            var actions = streamingStep.querySelector('.response-actions');
+            if (actions) {
+                var copyBtn = document.createElement('button');
+                copyBtn.className = 'response-action-btn';
+                copyBtn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy';
+                copyBtn.addEventListener('click', function() {
+                    vscode.postMessage({ command: 'copyCode', code: text });
+                });
+                actions.appendChild(copyBtn);
+            }
+        }
+        streamingStep = null;
+        streamingContent = null;
+        userScrolledUp = false;
+    }
+
+    function showToolResult(type, data) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
         var step = document.createElement('div');
         step.className = 'step assistant';
 
-        // Role label
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Tool Result';
+        step.appendChild(label);
+
+        var content = document.createElement('div');
+        content.className = 'step-content';
+        content.innerHTML = '<div class="tool-result"><div class="tool-result-header"><span class="tool-result-icon">✓</span><span class="tool-result-name">' + escapeHtml(type) + '</span></div><div class="tool-result-body">' + escapeHtml(data) + '</div></div>';
+        step.appendChild(content);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    function showDiff(filePath, html) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        var step = document.createElement('div');
+        step.className = 'step assistant';
+
+        var label = document.createElement('div');
+        label.className = 'step-label';
+        label.textContent = 'Diff Preview';
+        step.appendChild(label);
+
+        var content = document.createElement('div');
+        content.className = 'step-content';
+        content.innerHTML = html;
+        step.appendChild(content);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    function showTerminalResult(stdout, stderr, code) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        var step = document.createElement('div');
+        step.className = 'step assistant';
+
         var label = document.createElement('div');
         label.className = 'step-label';
         label.textContent = 'Terminal';
@@ -518,694 +721,144 @@
 
         var content = document.createElement('div');
         content.className = 'step-content';
-        var result = document.createElement('div');
-        result.className = 'terminal-result';
 
-        var header = document.createElement('div');
-        header.className = 'terminal-header';
-        var cmdDisplay = lastTerminalCmd ? ('$ ' + escapeHtml(lastTerminalCmd)) : 'Terminal';
-        header.innerHTML = '<span class="terminal-cmd">' + cmdDisplay + '</span>' +
-            '<span class="terminal-exit ' + (exitCode === 0 ? 'success' : 'error') + '">exit: ' + exitCode + '</span>';
+        var exitClass = code === 0 ? 'success' : 'error';
+        var exitText = code === 0 ? '✓ Exit code: 0' : '✗ Exit code: ' + code;
 
-        var body = document.createElement('div');
-        body.className = 'terminal-body';
-        if (stdout) {
-            var stdoutEl = document.createElement('div');
-            stdoutEl.className = 'terminal-stdout';
-            stdoutEl.textContent = stdout;
-            body.appendChild(stdoutEl);
-        }
-        if (stderr) {
-            var stderrEl = document.createElement('div');
-            stderrEl.className = 'terminal-stderr';
-            stderrEl.textContent = stderr;
-            body.appendChild(stderrEl);
-        }
-        if (!stdout && !stderr) {
-            body.textContent = '(no output)';
-        }
+        var html = '<div class="terminal-result">';
+        html += '<div class="terminal-header">';
+        html += '<span class="terminal-label">Terminal</span>';
+        html += '<span class="terminal-cmd">' + escapeHtml(lastTerminalCmd) + '</span>';
+        html += '<span class="terminal-exit ' + exitClass + '">' + exitText + '</span>';
+        html += '</div>';
+        html += '<div class="terminal-body">';
+        if (stdout) html += '<div class="terminal-stdout">' + escapeHtml(stdout) + '</div>';
+        if (stderr) html += '<div class="terminal-stderr">' + escapeHtml(stderr) + '</div>';
+        html += '</div>';
+        html += '</div>';
 
-        result.appendChild(header);
-        result.appendChild(body);
-        content.appendChild(result);
+        content.innerHTML = html;
         step.appendChild(content);
 
-        var actions = document.createElement('div');
-        actions.className = 'response-actions';
-        step.appendChild(actions);
-
         stepsArea.insertBefore(step, thinkingEl);
-        stepsArea.scrollTop = stepsArea.scrollHeight;
+        scrollToBottom();
     }
 
-    // ═══════════════════════════════════════
-    // History Restore
-    // ═══════════════════════════════════════
+    function updateContextPills(contexts) {
+        if (!contextArea) return;
+        contextArea.innerHTML = '';
+        contexts.forEach(function(ctx) {
+            var tag = document.createElement('div');
+            tag.className = 'context-tag';
+            tag.innerHTML = '<span class="context-tag-icon">' + (ctx.icon || '📄') + '</span>' +
+                '<span>' + escapeHtml(ctx.label) + '</span>';
+            contextArea.appendChild(tag);
+        });
+    }
 
     function restoreHistory(messages) {
-        if (!messages || messages.length === 0) return;
-        welcomeEl.style.display = 'none';
+        if (welcomeEl) welcomeEl.style.display = 'none';
         messages.forEach(function(msg) {
             appendStep(msg.text, msg.role);
         });
     }
 
-    // ═══════════════════════════════════════
-    // Context Tags
-    // ═══════════════════════════════════════
-
-    function updateContextPills(contexts) {
-        if (!contextArea) return;
-        contextArea.innerHTML = '';
-        if (!contexts || contexts.length === 0) return;
-
-        contexts.forEach(function(ctx) {
-            var tag = document.createElement('span');
-            tag.className = 'context-tag';
-            tag.textContent = ctx.label;
-            contextArea.appendChild(tag);
-        });
-    }
-
-    // ═══════════════════════════════════════
-    // Send
-    // ═══════════════════════════════════════
-
-    function doSend() {
-        var text = inputEl.value.trim();
-        if (!text) return;
-
-        // Check for slash commands
-        if (text.startsWith('/')) {
-            var slashMatch = text.match(/^\/(\w+)\s*(.*)/);
-            if (slashMatch) {
-                var cmdName = slashMatch[1];
-                var knownCmd = slashCommandsList.find(function(c) { return c.name === cmdName; });
-                if (knownCmd) {
-                    welcomeEl.style.display = 'none';
-                    thinkingEl.style.display = 'none';
-                    appendStep(text, 'user');
-                    vscode.postMessage({ command: 'slashCommand', text: text });
-                    requestAnimationFrame(function() {
-                        inputEl.value = '';
-                        inputEl.style.height = 'auto';
-                        focusInput();
-                    });
-                    return;
-                }
-            }
-        }
-
-        welcomeEl.style.display = 'none';
-        thinkingEl.style.display = 'none';
-        appendStep(text, 'user');
-        vscode.postMessage({ command: 'sendMessage', text: text });
-
-        // Update context pills with mentioned files
-        if (mentionedFiles.length > 0) {
-            var pills = mentionedFiles.map(function(f) { return { type: 'file', label: f }; });
-            updateContextPills(pills);
-            mentionedFiles = [];
-        }
-
-        // Add to command history
-        if (text && (commandHistory.length === 0 || commandHistory[commandHistory.length - 1] !== text)) {
-            commandHistory.push(text);
-            if (commandHistory.length > 50) commandHistory.shift();
-        }
-        commandHistoryIndex = -1;
-
-        requestAnimationFrame(function() {
-            inputEl.value = '';
-            inputEl.style.height = 'auto';
-            focusInput();
-        });
-    }
-
-    sendBtnEl.addEventListener('click', function(e) { e.preventDefault(); doSend(); });
-
-    inputEl.addEventListener('keydown', function(e) {
-        // Command history navigation
-        if (e.key === 'ArrowUp' && inputEl.value === '' && commandHistory.length > 0) {
-            e.preventDefault();
-            if (commandHistoryIndex < commandHistory.length - 1) {
-                commandHistoryIndex++;
-            }
-            inputEl.value = commandHistory[commandHistory.length - 1 - commandHistoryIndex];
-            return;
-        }
-        if (e.key === 'ArrowDown' && commandHistoryIndex >= 0) {
-            e.preventDefault();
-            commandHistoryIndex--;
-            if (commandHistoryIndex < 0) {
-                inputEl.value = '';
-            } else {
-                inputEl.value = commandHistory[commandHistory.length - 1 - commandHistoryIndex];
-            }
-            return;
-        }
-
-        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); doSend(); }
-    });
-
-    inputEl.addEventListener('input', function() {
-        this.style.height = 'auto';
-        this.style.height = Math.min(this.scrollHeight, 120) + 'px';
-    });
-
-    // ═══════════════════════════════════════
-    // Clear & Settings
-    // ═══════════════════════════════════════
-
-    var historyBtnEl = document.getElementById('historyBtn');
-    if (historyBtnEl) {
-        historyBtnEl.addEventListener('click', function(e) {
-            e.preventDefault();
-            toggleSessionList();
-        });
-    }
-
-    clearBtnEl.addEventListener('click', function(e) {
-        e.preventDefault();
-        // 清除所有 step，保留 welcome 和 thinking
-        var steps = stepsArea.querySelectorAll('.step');
-        steps.forEach(function(s) { s.remove(); });
-        welcomeEl.style.display = '';
-        thinkingEl.style.display = '';
-        vscode.postMessage({ command: 'clearChat' });
-        focusInput();
-    });
-
-    settingsBtnEl.addEventListener('click', function(e) {
-        e.preventDefault();
-        vscode.postMessage({ command: 'openSettings' });
-    });
-
-    // ═══════════════════════════════════════
-    // Conversation Starters
-    // ═══════════════════════════════════════
-
-    document.querySelectorAll('.starter-btn').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var prompt = this.getAttribute('data-prompt');
-            if (prompt) { inputEl.value = prompt; focusInput(); }
-        });
-    });
-
-    // ═══════════════════════════════════════
-    // Step Container — Continue 风格
-    // 每个 step 独立，操作按钮在下方
-    // ═══════════════════════════════════════
-
-    function appendStep(text, role) {
-        var step = document.createElement('div');
-        step.className = 'step ' + role;
-
-        // Role label
-        var label = document.createElement('div');
-        label.className = 'step-label';
-        label.textContent = role === 'user' ? 'You' : 'Assistant';
-        step.appendChild(label);
-
-        // Step Content
-        var content = document.createElement('div');
-        content.className = 'step-content';
-        var rendered = renderMarkdown(text);
-        // Highlight @mentions in user messages
-        if (role === 'user') {
-            rendered = rendered.replace(/@(\S+)/g, '<span class="at-mention">@$1</span>');
-        }
-        content.innerHTML = rendered;
-
-        step.appendChild(content);
-
-        // Response Actions — Continue 风格，右对齐
-        if (role === 'assistant') {
-            var actions = document.createElement('div');
-            actions.className = 'response-actions';
-
-            var copyBtn = createActionButton('Copy', function() {
-                vscode.postMessage({ command: 'copyCode', code: text });
-            });
-            actions.appendChild(copyBtn);
-
-            step.appendChild(actions);
-        }
-
-        // User 消息也需要一个 actions 区域保持布局一致
-        if (role === 'user') {
-            var userActions = document.createElement('div');
-            userActions.className = 'response-actions';
-            step.appendChild(userActions);
-        }
-
-        // 插入到 thinking 之前
-        stepsArea.insertBefore(step, thinkingEl);
-        stepsArea.scrollTop = stepsArea.scrollHeight;
-
-        // 代码块操作栏
-        addCodeActions(step);
-    }
-
-    function createActionButton(label, onClick) {
-        var btn = document.createElement('button');
-        btn.className = 'response-action-btn';
-        btn.textContent = label;
-        btn.addEventListener('click', function() {
-            onClick();
-            btn.textContent = 'Done';
-            setTimeout(function() { btn.textContent = label; }, 1500);
-        });
-        return btn;
-    }
-
-    function addCodeActions(container) {
-        container.querySelectorAll('pre').forEach(function(pre) {
-            var code = pre.querySelector('code');
-            if (!code) return;
-
-            var langMatch = code.className.match(/language-(\w+)/);
-            var lang = langMatch ? langMatch[1] : 'code';
-
-            // Line numbers via CSS counters (zero DOM modification)
-            var lineCount = code.textContent.split('\n').length;
-            if (lineCount > 2) {
-                pre.classList.add('has-linenums');
-            }
-
-            var bar = document.createElement('div');
-            bar.className = 'code-bar';
-
-            var langSpan = document.createElement('span');
-            langSpan.className = 'code-lang';
-            langSpan.textContent = lang;
-
-            var actions = document.createElement('div');
-            actions.className = 'code-actions';
-
-            var copyBtn = document.createElement('button');
-            copyBtn.className = 'code-action-btn';
-            copyBtn.textContent = 'Copy';
-            copyBtn.addEventListener('click', function() {
-                vscode.postMessage({ command: 'copyCode', code: code.textContent });
-                copyBtn.textContent = 'Copied';
-                setTimeout(function() { copyBtn.textContent = 'Copy'; }, 1500);
-            });
-
-            var insertBtn = document.createElement('button');
-            insertBtn.className = 'code-action-btn';
-            insertBtn.textContent = 'Insert';
-            insertBtn.addEventListener('click', function() {
-                vscode.postMessage({ command: 'insertCode', code: code.textContent });
-                insertBtn.textContent = 'Done';
-                setTimeout(function() { insertBtn.textContent = 'Insert'; }, 1500);
-            });
-
-            var editBtn = document.createElement('button');
-            editBtn.className = 'code-action-btn';
-            editBtn.textContent = 'Edit';
-            editBtn.addEventListener('click', function() {
-                // Replace the code block with an inline editor
-                var existing = pre.parentNode.querySelector('.inline-editor');
-                if (existing) { existing.remove(); return; }
-                var editor = createInlineEditor(code.textContent, lang, null);
-                pre.parentNode.insertBefore(editor, pre.nextSibling);
-            });
-
-            // Run button for shell/bash/python code blocks
-            if (['shell', 'bash', 'sh', 'python', 'py'].includes(lang)) {
-                var runBtn = document.createElement('button');
-                runBtn.className = 'code-action-btn run';
-                runBtn.textContent = 'Run';
-                runBtn.addEventListener('click', function() {
-                    var cmd = code.textContent;
-                    if (['python', 'py'].includes(lang)) {
-                        cmd = 'python3 -c ' + JSON.stringify(cmd);
-                    }
-                    lastTerminalCmd = cmd;
-                    vscode.postMessage({ command: 'executeTerminal', command_text: cmd });
-                    runBtn.textContent = 'Running...';
-                    setTimeout(function() { runBtn.textContent = 'Run'; }, 3000);
-                });
-                actions.appendChild(runBtn);
-            }
-
-            actions.appendChild(copyBtn);
-            actions.appendChild(insertBtn);
-            actions.appendChild(editBtn);
-            bar.appendChild(langSpan);
-            bar.appendChild(actions);
-            pre.insertBefore(bar, pre.firstChild);
-        });
-    }
-
-    // ═══════════════════════════════════════
-    // Diff Display — Continue 风格
-    // ═══════════════════════════════════════
-
-    function showDiff(filePath, html) {
-        welcomeEl.style.display = 'none';
-
-        var step = document.createElement('div');
-        step.className = 'step assistant';
-
-        // Role label
-        var label = document.createElement('div');
-        label.className = 'step-label';
-        label.textContent = 'Diff';
-        step.appendChild(label);
-
-        var content = document.createElement('div');
-        content.className = 'step-content';
-
-        var desc = document.createElement('div');
-        desc.style.cssText = 'margin-bottom:8px;font-size:12px;color:var(--text-desc);';
-        desc.textContent = 'Proposed changes to ' + filePath;
-
-        var diffContainer = document.createElement('div');
-        diffContainer.className = 'diff-container';
-        diffContainer.innerHTML = html;
-
-        // Diff Actions — Continue 风格
-        var diffActions = document.createElement('div');
-        diffActions.className = 'diff-actions';
-
-        var acceptBtn = document.createElement('button');
-        acceptBtn.className = 'diff-btn accept';
-        acceptBtn.textContent = 'Apply';
-        acceptBtn.addEventListener('click', function() {
-            vscode.postMessage({ command: 'applyDiff', filePath: filePath });
-        });
-
-        var rejectBtn = document.createElement('button');
-        rejectBtn.className = 'diff-btn reject';
-        rejectBtn.textContent = 'Reject';
-        rejectBtn.addEventListener('click', function() {
-            vscode.postMessage({ command: 'rejectDiff', filePath: filePath });
-            step.remove();
-        });
-
-        var acceptAllBtn = document.createElement('button');
-        acceptAllBtn.className = 'diff-btn accept-all';
-        acceptAllBtn.textContent = 'Apply All';
-        acceptAllBtn.addEventListener('click', function() {
-            vscode.postMessage({ command: 'applyAllDiffs' });
-        });
-
-        diffActions.appendChild(acceptBtn);
-        diffActions.appendChild(rejectBtn);
-        diffActions.appendChild(acceptAllBtn);
-
-        diffContainer.appendChild(diffActions);
-        content.appendChild(desc);
-        content.appendChild(diffContainer);
-        step.appendChild(content);
-
-        // Response actions
-        var actions = document.createElement('div');
-        actions.className = 'response-actions';
-        step.appendChild(actions);
-
-        stepsArea.insertBefore(step, thinkingEl);
-        stepsArea.scrollTop = stepsArea.scrollHeight;
-    }
-
-    // ═══════════════════════════════════════
-    // Tool Result Display
-    // ═══════════════════════════════════════
-
-    function showToolResult(type, data) {
-        var div = document.createElement('div');
-        div.className = 'step assistant';
-
-        // Role label
-        var label = document.createElement('div');
-        label.className = 'step-label';
-        label.textContent = type === 'read_file' ? 'File Read' : type;
-        div.appendChild(label);
-
-        var content = document.createElement('div');
-        content.className = 'step-content';
-
-        var result = document.createElement('div');
-        result.className = 'tool-result';
-
-        var header = document.createElement('div');
-        header.className = 'tool-result-header';
-        header.textContent = type === 'read_file' ? 'File Read' : type;
-
-        var body = document.createElement('div');
-        body.className = 'tool-result-body';
-        body.textContent = data;
-
-        result.appendChild(header);
-        result.appendChild(body);
-        content.appendChild(result);
-        div.appendChild(content);
-
-        // Response actions
-        var actions = document.createElement('div');
-        actions.className = 'response-actions';
-        div.appendChild(actions);
-
-        stepsArea.insertBefore(div, thinkingEl);
-        stepsArea.scrollTop = stepsArea.scrollHeight;
-    }
-
-    // ═══════════════════════════════════════
-    // Markdown Renderer
-    // ═══════════════════════════════════════
-
-    function renderMarkdown(text) {
-        var html = text;
-
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
-            var langClass = lang || 'text';
-            var trimmed = code.trim();
-            // 先高亮（正则匹配原始代码），再转义非高亮部分
-            var highlighted = highlightSyntax(trimmed, lang);
-            // highlightSyntax 产出的 HTML 已包含 <span> 标签，只需转义剩余纯文本
-            var safe = escapeHtmlPreservingSpans(highlighted);
-            return '<pre><code class="language-' + langClass + '">' + safe + '</code></pre>';
-        });
-
-        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
-        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/^(\d+)\. (.+)$/gm, '<li>$2</li>');
-        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-        html = html.replace(/^---$/gm, '<hr>');
-        html = html.replace(/\n\n/g, '</p><p>');
-        html = html.replace(/\n/g, '<br>');
-
-        return '<p>' + html + '</p>';
-    }
-
-    function escapeHtml(text) {
-        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    }
-
-    // 转义 HTML 但保留 <span> 标签（用于语法高亮后的安全输出）
-    function escapeHtmlPreservingSpans(html) {
-        // 先提取所有 <span...>...</span> 标签
-        var parts = html.split(/(<span[^>]*>|<\/span>)/g);
-        return parts.map(function(part) {
-            if (part.startsWith('<span') || part === '</span>') return part; // 保留标签
-            return escapeHtml(part); // 转义纯文本
-        }).join('');
-    }
-
-    // ═══════════════════════════════════════
-    // Helpers
-    // ═══════════════════════════════════════
-
-    function focusInput() { if (inputEl) inputEl.focus(); }
-
-    // Close dropdowns on outside click
-    document.addEventListener('click', function(e) {
-        if (isFileDropdownOpen && !e.target.closest('.file-dropdown') && e.target !== inputEl) {
-            closeFileDropdown();
-        }
-        if (isSlashDropdownOpen && !e.target.closest('.slash-dropdown') && e.target !== inputEl) {
-            closeSlashDropdown();
-        }
-    });
-
-    stepsArea.addEventListener('click', function(e) {
-        if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) { focusInput(); }
-    });
-
-    // ═══════════════════════════════════════
-    // Message Handler
-    // ═══════════════════════════════════════
-    // Streaming State
-    // ═══════════════════════════════════════
-
-    var streamingStep = null;
-    var streamingContent = null;
-    var streamBuffer = '';
-    var userScrolledUp = false;
-
-    var streamRenderTimer = null;
-    var streamTextNode = null;       // single text node, append-only
-    var streamPlainDiv = null;       // plain text container
-
-    function startStream() {
-        welcomeEl.style.display = 'none';
-        userScrolledUp = false;
-
-        streamingStep = document.createElement('div');
-        streamingStep.className = 'step assistant';
-
-        // Role label
-        var label = document.createElement('div');
-        label.className = 'step-label';
-        label.textContent = 'Assistant';
-        streamingStep.appendChild(label);
-
-        streamingContent = document.createElement('div');
-        streamingContent.className = 'step-content streaming';
-
-        // During streaming: plain text container (no innerHTML, no flicker)
-        streamPlainDiv = document.createElement('div');
-        streamPlainDiv.className = 'stream-plain';
-        streamTextNode = document.createTextNode('');
-        streamPlainDiv.appendChild(streamTextNode);
-        streamingContent.appendChild(streamPlainDiv);
-
-        streamingStep.appendChild(streamingContent);
-        stepsArea.insertBefore(streamingStep, thinkingEl);
-        streamBuffer = '';
-
-        thinkingEl.classList.remove('show');
-        thinkingEl.classList.add('streaming');
-    }
-
-    function appendStreamChunk(chunk) {
-        if (!streamTextNode) return;
-        streamBuffer += chunk;
-
-        // Append text only — zero DOM destruction, zero flicker
-        streamTextNode.textContent = streamBuffer;
-
-        // Throttle scroll to every 3rd chunk
-        if (!userScrolledUp && streamBuffer.length % 3 === 0) {
+    function scrollToBottom() {
+        if (stepsArea) {
             stepsArea.scrollTop = stepsArea.scrollHeight;
         }
     }
 
-    function endStream() {
-        if (streamRenderTimer) {
-            clearTimeout(streamRenderTimer);
-            streamRenderTimer = null;
-        }
-
-        if (streamingStep) {
-            streamingContent.classList.remove('streaming');
-
-            // Replace plain text with full markdown render (one-time)
-            streamingContent.innerHTML = renderMarkdown(streamBuffer);
-            addCodeActions(streamingContent);
-
-            // Cleanup references
-            streamTextNode = null;
-            streamPlainDiv = null;
-
-            // 添加 response actions
-            var actions = document.createElement('div');
-            actions.className = 'response-actions';
-
-            var copyBtn = createActionButton('Copy', function() {
-                vscode.postMessage({ command: 'copyCode', code: streamBuffer });
-            });
-            actions.appendChild(copyBtn);
-
-            streamingStep.appendChild(actions);
-        }
-        streamingStep = null;
-        streamingContent = null;
-        streamBuffer = '';
-        userScrolledUp = false;
-        thinkingEl.classList.remove('streaming');
+    function focusInput() {
+        if (inputEl) inputEl.focus();
     }
 
-    function cancelStream() {
-        if (streamRenderTimer) {
-            cancelAnimationFrame(streamRenderTimer);
-            streamRenderTimer = null;
-        }
-        if (streamingStep) {
-            streamingContent.classList.remove('streaming');
-            streamingContent.innerHTML = renderMarkdown(streamBuffer + '\n\n*[Cancelled]*');
-        }
-        streamTextNode = null;
-        streamPlainDiv = null;
-        streamingStep = null;
-        streamingContent = null;
-        streamBuffer = '';
-        userScrolledUp = false;
-        thinkingEl.classList.remove('streaming');
-        sendBtnEl.disabled = false;
+    // ═══════════════════════════════════════
+    // Event Listeners
+    // ═══════════════════════════════════════
+
+    // Send message
+    function sendMessage() {
+        var text = inputEl.value.trim();
+        if (!text) return;
+
+        vscode.postMessage({ command: 'sendMessage', text: text });
+        inputEl.value = '';
+        focusInput();
     }
 
-    // Escape 取消流式
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && streamingStep) {
-            cancelStream();
+    if (sendBtnEl) {
+        sendBtnEl.addEventListener('click', sendMessage);
+    }
+
+    if (inputEl) {
+        inputEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                if (!isFileDropdownOpen && !isSlashDropdownOpen) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            }
+        });
+    }
+
+    // Clear chat
+    if (clearBtnEl) {
+        clearBtnEl.addEventListener('click', function() {
+            vscode.postMessage({ command: 'clearChat' });
+        });
+    }
+
+    // Settings
+    if (settingsBtnEl) {
+        settingsBtnEl.addEventListener('click', function() {
+            vscode.postMessage({ command: 'openSettings' });
+        });
+    }
+
+    // History
+    var historyBtn = document.getElementById('historyBtn');
+    if (historyBtn) {
+        historyBtn.addEventListener('click', function() {
+            toggleSessionList();
+        });
+    }
+
+    // Copy code buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.classList.contains('copy-btn')) {
+            var codeBlock = e.target.closest('pre').querySelector('code');
+            if (codeBlock) {
+                vscode.postMessage({ command: 'copyCode', code: codeBlock.textContent });
+            }
+        }
+        if (e.target.classList.contains('run-btn')) {
+            var codeBlock = e.target.closest('pre').querySelector('code');
+            if (codeBlock) {
+                lastTerminalCmd = codeBlock.textContent;
+                vscode.postMessage({ command: 'executeTerminal', command_text: codeBlock.textContent });
+            }
         }
     });
 
-    /**
-     * 流式 Markdown 渲染 — 处理未闭合的代码块
-     */
-    function renderStreamingMarkdown(text) {
-        var html = text;
-
-        // Close unclosed code blocks
-        var codeBlockRegex = /```(\w*)\n([\s\S]*?)```/g;
-        var lastCodeBlockEnd = 0;
-        var match;
-        while ((match = codeBlockRegex.exec(html)) !== null) {
-            lastCodeBlockEnd = match.index + match[0].length;
-        }
-        var parts = html.split('```');
-        if (parts.length % 2 === 0) {
-            html += '\n```';
-        }
-
-        // During streaming: plain rendering (no syntax highlighting, no line numbers)
-        // This prevents flickering from re-tokenizing on every frame
-        html = html.replace(/```(\w*)\n([\s\S]*?)```/g, function(m, lang, code) {
-            return '<pre><code class="language-' + (lang || 'text') + '">' + escapeHtml(code.trim()) + '</code></pre>';
+    // Starter buttons
+    document.querySelectorAll('.starter-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var prompt = btn.getAttribute('data-prompt');
+            if (prompt) {
+                vscode.postMessage({ command: 'insertPrompt', text: prompt });
+            }
         });
+    });
 
-        // Basic markdown (same as renderMarkdown but lighter)
-        html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-        html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-        html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-        html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-        html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
-        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
-        html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
-        html = html.replace(/^---$/gm, '<hr>');
-        html = html.replace(/\n\n/g, '</p><p>');
-        html = html.replace(/\n/g, '<br>');
-
-        return '<p>' + html + '</p>';
-    }
-
-    // 监听用户滚动，判断是否手动滚动上去
+    // Listen for scroll
     stepsArea.addEventListener('scroll', function() {
         var isAtBottom = stepsArea.scrollHeight - stepsArea.scrollTop - stepsArea.clientHeight < 50;
         userScrolledUp = !isAtBottom && streamingStep !== null;
     });
 
+    // ═══════════════════════════════════════
+    // Message Handler
     // ═══════════════════════════════════════
 
     window.addEventListener('message', function(event) {
@@ -1224,19 +877,25 @@
                 endStream();
                 break;
             case 'startThinking':
-                thinkingEl.classList.add('show');
-                sendBtnEl.disabled = true;
+                if (thinkingEl) {
+                    thinkingEl.style.display = 'flex';
+                    thinkingEl.classList.add('show');
+                }
+                if (sendBtnEl) sendBtnEl.disabled = true;
                 break;
             case 'stopThinking':
-                thinkingEl.classList.remove('show');
-                sendBtnEl.disabled = false;
+                if (thinkingEl) {
+                    thinkingEl.classList.remove('show');
+                    thinkingEl.style.display = '';
+                }
+                if (sendBtnEl) sendBtnEl.disabled = false;
                 focusInput();
                 break;
             case 'clearChat':
                 var steps = stepsArea.querySelectorAll('.step');
                 steps.forEach(function(s) { s.remove(); });
-                welcomeEl.style.display = '';
-                thinkingEl.style.display = '';
+                if (welcomeEl) welcomeEl.style.display = '';
+                if (thinkingEl) thinkingEl.style.display = '';
                 break;
             case 'modeChanged':
                 setMode(msg.mode);
@@ -1255,11 +914,8 @@
                 appliedContent.className = 'step-content';
                 appliedContent.innerHTML = '<div class="tool-result"><div class="tool-result-header" style="color:var(--success)">Applied</div><div class="tool-result-body">' + msg.filePath + ' saved. Changes highlighted in editor.</div></div>';
                 appliedStep.appendChild(appliedContent);
-                var appliedActions = document.createElement('div');
-                appliedActions.className = 'response-actions';
-                appliedStep.appendChild(appliedActions);
                 stepsArea.insertBefore(appliedStep, thinkingEl);
-                stepsArea.scrollTop = stepsArea.scrollHeight;
+                scrollToBottom();
                 break;
             case 'diffRejected':
                 break;
@@ -1305,7 +961,7 @@
                 appliedContent2.innerHTML = '<div class="tool-result"><div class="tool-result-header" style="color:var(--success)">Inline Edit Applied</div><div class="tool-result-body">' + escapeHtml(msg.filePath) + ' has been updated.</div></div>';
                 appliedStep2.appendChild(appliedContent2);
                 stepsArea.insertBefore(appliedStep2, thinkingEl);
-                stepsArea.scrollTop = stepsArea.scrollHeight;
+                scrollToBottom();
                 break;
             case 'restoreHistory':
                 restoreHistory(msg.messages);
@@ -1332,7 +988,10 @@
         if (!sessionListEl) {
             sessionListEl = document.createElement('div');
             sessionListEl.className = 'session-list';
-            document.querySelector('.input-area').insertBefore(sessionListEl, document.querySelector('.input-toolbar'));
+            var inputArea = document.querySelector('.input-area');
+            if (inputArea) {
+                inputArea.insertBefore(sessionListEl, inputArea.firstChild);
+            }
         }
         sessionListEl.innerHTML = '';
         sessionListEl.style.display = 'none';

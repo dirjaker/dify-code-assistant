@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dify Code Assistant - UI Preview</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;
+            --bg-input: #3c3c3c;
+            --bg-hover: #2a2d2e;
+            --bg-active: #094771;
+            --border: #3c3c3c;
+            --border-focus: #007fd4;
+            --text: #cccccc;
+            --text-desc: #999999;
+            --text-muted: #666666;
+            --accent: #0e639c;
+            --accent-hover: #1177bb;
+            --accent-text: #ffffff;
+            --error: #f44747;
+            --success: #4ec9b0;
+            --warning: #d7ba7d;
+            --font: system-ui, -apple-system, sans-serif;
+            --font-mono: 'Cascadia Code', 'Fira Code', monospace;
+            --radius: 6px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: var(--font);
+            font-size: 13px;
+            color: var(--text);
+            background: var(--bg);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .grid-layout {
+            display: grid;
+            grid-template-rows: auto 1fr auto;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Tab Bar */
+        .tab-bar {
+            display: flex;
+            align-items: center;
+            background: #1e1e1e;
+            border-bottom: 1px solid #333;
+            height: 32px;
+            padding: 0 4px;
+            gap: 2px;
+        }
+
+        .tab-list {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            flex: 1;
+            min-width: 0;
+            overflow-x: auto;
+        }
+
+        .tab-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            background: #2d2d2d;
+            border: 1px solid #3e3e3e;
+            border-radius: 6px 6px 0 0;
+            font-size: 11px;
+            color: #888;
+            cursor: pointer;
+            white-space: nowrap;
+            max-width: 140px;
+            min-width: 60px;
+        }
+
+        .tab-item.active {
+            background: #1e1e1e;
+            color: #ccc;
+            border-bottom-color: #1e1e1e;
+        }
+
+        .tab-new {
+            background: transparent;
+            border: none;
+            color: #888;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .tab-new:hover {
+            background: #333;
+            color: #ccc;
+        }
+
+        /* Steps Area */
+        .steps-area {
+            overflow-y: auto;
+            padding: 16px;
+        }
+
+        .welcome {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .welcome-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .welcome-desc {
+            color: var(--text-desc);
+            margin-bottom: 24px;
+        }
+
+        .welcome-features {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            margin-bottom: 32px;
+        }
+
+        .feature-hint {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: #2d2d2d;
+            border-radius: 6px;
+            font-size: 12px;
+            color: var(--text-desc);
+        }
+
+        .feature-hint kbd {
+            background: #3c3c3c;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 11px;
+        }
+
+        .conversation-starters {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+
+        .starter-btn {
+            background: #2d2d2d;
+            border: 1px solid #3c3c3c;
+            border-radius: 8px;
+            padding: 16px;
+            cursor: pointer;
+            text-align: left;
+            transition: border-color 0.2s;
+        }
+
+        .starter-btn:hover {
+            border-color: var(--accent);
+        }
+
+        .starter-label {
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 4px;
+        }
+
+        .starter-desc {
+            font-size: 12px;
+            color: var(--text-desc);
+        }
+
+        /* Message Area */
+        .message {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #2d2d2d;
+            border-radius: 8px;
+        }
+
+        .message.user {
+            background: #0e639c;
+            margin-left: 40px;
+        }
+
+        .message.assistant {
+            background: #2d2d2d;
+            margin-right: 40px;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: var(--text-desc);
+        }
+
+        .message-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .message-avatar.user {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .message-avatar.assistant {
+            background: var(--success);
+            color: #000;
+        }
+
+        .message-content {
+            line-height: 1.6;
+        }
+
+        .message-content code {
+            background: #1e1e1e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 12px;
+        }
+
+        .message-content pre {
+            background: #1e1e1e;
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .message-content pre code {
+            background: transparent;
+            padding: 0;
+        }
+
+        /* Thinking Indicator */
+        .thinking {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px;
+            color: var(--text-desc);
+        }
+
+        .thinking .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: thinking 1.4s infinite ease-in-out both;
+        }
+
+        .thinking .dot:nth-child(1) { animation-delay: -0.32s; }
+        .thinking .dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes thinking {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* Input Area */
+        .input-area {
+            border-top: 1px solid #333;
+            padding: 12px;
+            background: #1e1e1e;
+        }
+
+        .input-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .toolbar-left {
+            display: flex;
+            gap: 4px;
+        }
+
+        .toolbar-right {
+            display: flex;
+            gap: 4px;
+        }
+
+        .mode-btn {
+            background: transparent;
+            border: 1px solid #3c3c3c;
+            color: var(--text-desc);
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: #fff;
+            border-color: var(--accent);
+        }
+
+        .icon-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-desc);
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+        }
+
+        .icon-btn:hover {
+            background: #333;
+            color: #ccc;
+        }
+
+        .context-tags {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            flex-wrap: wrap;
+        }
+
+        .context-tag {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            background: #2d2d2d;
+            border-radius: 4px;
+            font-size: 11px;
+            color: var(--text-desc);
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        #userInput {
+            flex: 1;
+            background: var(--bg-input);
+            color: var(--text);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 10px 12px;
+            font-size: 13px;
+            font-family: inherit;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+            outline: none;
+        }
+
+        #userInput:focus {
+            border-color: var(--border-focus);
+        }
+
+        #sendBtn {
+            background: var(--accent);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius);
+            padding: 10px 16px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        #sendBtn:hover {
+            background: var(--accent-hover);
+        }
+
+        .input-hint {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .input-hint kbd {
+            background: #3c3c3c;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-family: var(--font-mono);
+            font-size: 10px;
+        }
+
+        /* Tool Result */
+        .tool-result {
+            background: #1e1e1e;
+            border: 1px solid #3c3c3c;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            white-space: pre-wrap;
+            overflow-x: auto;
+        }
+
+        .tool-result-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: var(--success);
+            font-weight: 600;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3c3c3c;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4c4c4c;
+        }
+    </style>
+</head>
+<body>
+    <div class="grid-layout">
+        <!-- Tab Bar -->
+        <div class="tab-bar">
+            <div class="tab-list">
+                <div class="tab-item active">
+                    <span>New Chat</span>
+                    <button class="tab-close">×</button>
+                </div>
+                <div class="tab-item">
+                    <span>代码重构讨论</span>
+                    <button class="tab-close">×</button>
+                </div>
+            </div>
+            <button class="tab-new" title="New Chat">+</button>
+        </div>
+
+        <!-- Steps Area -->
+        <div class="steps-area">
+            <!-- Welcome Screen -->
+            <div class="welcome" id="welcome">
+                <div class="welcome-title">Dify Code Assistant</div>
+                <div class="welcome-desc">Ask questions, plan tasks, or let the agent write code.</div>
+                <div class="welcome-features">
+                    <div class="feature-hint"><kbd>@</kbd> Reference files</div>
+                    <div class="feature-hint"><kbd>/</kbd> Slash commands</div>
+                    <div class="feature-hint"><kbd>Ctrl+.</kbd> Switch mode</div>
+                    <div class="feature-hint"><kbd>Esc</kbd> Cancel stream</div>
+                </div>
+                <div class="conversation-starters">
+                    <button class="starter-btn">
+                        <div class="starter-label">Explain</div>
+                        <div class="starter-desc">Describe what the selected code does</div>
+                    </button>
+                    <button class="starter-btn">
+                        <div class="starter-label">Fix Bugs</div>
+                        <div class="starter-desc">Identify and resolve issues</div>
+                    </button>
+                    <button class="starter-btn">
+                        <div class="starter-label">Refactor</div>
+                        <div class="starter-desc">Improve code structure and readability</div>
+                    </button>
+                    <button class="starter-btn">
+                        <div class="starter-label">Write Tests</div>
+                        <div class="starter-desc">Generate test cases</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Example Messages -->
+            <div class="message user">
+                <div class="message-header">
+                    <div class="message-avatar user">U</div>
+                    <span>You</span>
+                </div>
+                <div class="message-content">
+                    帮我读取 package.json 文件，看看有哪些依赖
+                </div>
+            </div>
+
+            <div class="message assistant">
+                <div class="message-header">
+                    <div class="message-avatar assistant">AI</div>
+                    <span>Dify Assistant</span>
+                </div>
+                <div class="message-content">
+                    <p>我来帮你读取 package.json 文件。</p>
+                    <div class="tool-result">
+                        <div class="tool-result-header">✓ read_file</div>
+                        <code>{
+  "name": "dify-code-assistant",
+  "version": "1.2.0",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.22.0",
+    "typescript": "^5.3.3"
+  }
+}</code>
+                    </div>
+                    <p>项目有以下依赖：</p>
+                    <p><strong>运行时依赖：</strong></p>
+                    <ul>
+                        <li><code>node-fetch</code> ^3.3.2 - HTTP 请求库</li>
+                    </ul>
+                    <p><strong>开发依赖：</strong></p>
+                    <ul>
+                        <li><code>@types/node</code> ^20.11.0 - Node.js 类型定义</li>
+                        <li><code>@types/vscode</code> ^1.85.0 - VS Code API 类型定义</li>
+                        <li><code>@vscode/vsce</code> ^2.22.0 - VS Code 扩展打包工具</li>
+                        <li><code>typescript</code> ^5.3.3 - TypeScript 编译器</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Thinking Indicator -->
+            <div class="thinking">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <span>Thinking...</span>
+            </div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="input-area">
+            <!-- Mode Toolbar -->
+            <div class="input-toolbar">
+                <div class="toolbar-left">
+                    <button class="mode-btn active">Ask</button>
+                    <button class="mode-btn">Plan</button>
+                    <button class="mode-btn">Agent</button>
+                </div>
+                <div class="toolbar-right">
+                    <button class="icon-btn" title="History">🕐</button>
+                    <button class="icon-btn" title="New Chat">🗑️</button>
+                    <button class="icon-btn" title="Settings">⚙️</button>
+                </div>
+            </div>
+
+            <!-- Context Tags -->
+            <div class="context-tags">
+                <div class="context-tag">📄 src/difyClient.ts</div>
+                <div class="context-tag">📝 5 lines selected</div>
+            </div>
+
+            <!-- Input Row -->
+            <div class="input-row">
+                <textarea id="userInput" placeholder="Ask anything... (type @ for files, / for commands)" rows="1"></textarea>
+                <button id="sendBtn">Send</button>
+            </div>
+
+            <!-- Hint -->
+            <div class="input-hint">
+                <span><kbd>Enter</kbd> send / <kbd>Shift+Enter</kbd> newline</span>
+                <span>Ask mode</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
