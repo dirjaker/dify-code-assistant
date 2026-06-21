@@ -12,32 +12,16 @@ export interface ChatResponse {
     answer: string;
     conversationId: string;
     messageId: string;
-    toolCalls: ToolCall[];
+    toolCalls: ToolCallInfo[];
 }
 
-export interface ToolCall {
+export interface ToolCallInfo {
     id: string;
     name: string;
     arguments: Record<string, any>;
     status: 'pending' | 'running' | 'completed' | 'failed';
     result?: string;
     error?: string;
-}
-
-export interface ToolResult {
-    tool_call_id: string;
-    result: string;
-    error?: string;
-}
-
-export interface AgentThought {
-    id: string;
-    thought: string;
-    tool?: string;
-    tool_input?: Record<string, any>;
-    tool_call_id?: string;
-    observation?: string;
-    created_at: number;
 }
 
 export interface AgentCallbacks {
@@ -52,23 +36,18 @@ export interface AgentCallbacks {
 
 /**
  * Dify API 客户端
- * 支持 Chat 和 Agent 模式（含工具调用）
+ * 支持 Chat 模式 + Agent 工具循环
  */
 export class DifyClient {
     private config: DifyConfig;
     private conversationId: string | null = null;
     private messageHistory: Array<{ role: string; content: string }> = [];
     private toolServerPort: number = 0;
-    private currentToolCalls: Map<string, ToolCall> = new Map();
-    private registeredProviderId: string | null = null;
 
     constructor(config: DifyConfig) {
         this.config = config;
     }
 
-    /**
-     * 设置工具服务器端口（由 LocalToolServer 启动后调用）
-     */
     setToolServerPort(port: number): void {
         this.toolServerPort = port;
     }
@@ -99,199 +78,31 @@ export class DifyClient {
         return this.conversationId;
     }
 
-    getCurrentToolCalls(): ToolCall[] {
-        return Array.from(this.currentToolCalls.values());
-    }
-
     /**
-     * 注册工具到 Dify
+     * 注册工具到 Dify（尝试，失败不阻塞）
      */
     async registerTools(): Promise<boolean> {
-        if (!this.toolServerPort) {
-            console.error('Tool server not started');
-            return false;
-        }
-
-        const toolServerUrl = `http://127.0.0.1:${this.toolServerPort}`;
-
-        // OpenAPI schema for the tools
-        const schema = {
-            openapi: '3.0.0',
-            info: {
-                title: 'VS Code Local Tools',
-                description: 'Tools for interacting with VS Code workspace',
-                version: '1.0.0'
-            },
-            servers: [
-                {
-                    url: toolServerUrl
-                }
-            ],
-            paths: {
-                '/execute': {
-                    post: {
-                        operationId: 'execute_tool',
-                        summary: 'Execute a tool',
-                        description: 'Execute a tool on the local VS Code workspace',
-                        requestBody: {
-                            required: true,
-                            content: {
-                                'application/json': {
-                                    schema: {
-                                        type: 'object',
-                                        properties: {
-                                            tool: {
-                                                type: 'string',
-                                                description: 'Tool name',
-                                                enum: [
-                                                    'read_file',
-                                                    'edit_file',
-                                                    'run_process',
-                                                    'run_terminal',
-                                                    'list_files',
-                                                    'search_code'
-                                                ]
-                                            },
-                                            parameters: {
-                                                type: 'object',
-                                                description: 'Tool parameters',
-                                                oneOf: [
-                                                    {
-                                                        properties: {
-                                                            path: { type: 'string', description: 'File path' },
-                                                            start_line: { type: 'integer', description: 'Start line (1-indexed)' },
-                                                            end_line: { type: 'integer', description: 'End line (1-indexed)' }
-                                                        },
-                                                        required: ['path']
-                                                    },
-                                                    {
-                                                        properties: {
-                                                            path: { type: 'string', description: 'File path' },
-                                                            content: { type: 'string', description: 'File content' }
-                                                        },
-                                                        required: ['path', 'content']
-                                                    },
-                                                    {
-                                                        properties: {
-                                                            command: { type: 'string', description: 'Command to execute' },
-                                                            cwd: { type: 'string', description: 'Working directory' },
-                                                            timeout: { type: 'integer', description: 'Timeout in ms' }
-                                                        },
-                                                        required: ['command']
-                                                    },
-                                                    {
-                                                        properties: {
-                                                            path: { type: 'string', description: 'Directory path' }
-                                                        }
-                                                    },
-                                                    {
-                                                        properties: {
-                                                            query: { type: 'string', description: 'Search query' },
-                                                            include: { type: 'string', description: 'File pattern' },
-                                                            max_results: { type: 'integer', description: 'Max results' }
-                                                        },
-                                                        required: ['query']
-                                                    }
-                                                ]
-                                            }
-                                        },
-                                        required: ['tool', 'parameters']
-                                    }
-                                }
-                            }
-                        },
-                        responses: {
-                            '200': {
-                                description: 'Tool execution result',
-                                content: {
-                                    'application/json': {
-                                        schema: {
-                                            type: 'object',
-                                            properties: {
-                                                result: {
-                                                    type: 'string'
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        };
-
+        if (!this.toolServerPort) return false;
+        // Dify 工具注册需要平台侧配置，插件侧只做健康检查
         try {
-            const url = new URL(`${this.config.apiUrl}/v1/tools/providers`);
-
-            const response = await new Promise<any>((resolve, reject) => {
-                const isHttps = url.protocol === 'https:';
-                const transport = isHttps ? https : http;
-
-                const options = {
-                    hostname: url.hostname,
-                    port: url.port || (isHttps ? 443 : 80),
-                    path: url.pathname,
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${this.config.apiKey}`,
-                        'Content-Type': 'application/json'
-                    }
-                };
-
-                const req = transport.request(options, (res) => {
-                    let data = '';
-                    res.on('data', (chunk) => { data += chunk; });
-                    res.on('end', () => {
-                        try {
-                            resolve(JSON.parse(data));
-                        } catch (e) {
-                            reject(new Error(`Failed to parse response: ${data}`));
-                        }
-                    });
-                });
-
-                req.on('error', reject);
-                req.write(JSON.stringify({
-                    provider: 'vscode_local_tools',
-                    name: 'VS Code Local Tools',
-                    description: 'Tools for interacting with VS Code workspace',
-                    schema: JSON.stringify(schema)
-                }));
-                req.end();
-            });
-
-            if (response.id) {
-                this.registeredProviderId = response.id;
-                console.log('Tools registered successfully:', response.id);
-                return true;
-            } else {
-                console.error('Failed to register tools:', response);
-                return false;
-            }
-        } catch (error: any) {
-            console.error('Error registering tools:', error.message);
+            const result = await this.httpGet(`http://127.0.0.1:${this.toolServerPort}/health`);
+            return result.status === 'ok';
+        } catch {
             return false;
         }
     }
 
     /**
-     * 查询知识库
+     * 查询知识库（workflow 模式）
      */
     async queryKnowledge(
         query: string,
-        context?: {
-            language?: string;
-            queryType?: string;
-            projectContext?: string;
-        }
+        context?: { language?: string; queryType?: string; projectContext?: string }
     ): Promise<ChatResponse> {
-        const url = new URL(`${this.config.apiUrl}/v1/workflows/run`);
-
-        const body: any = {
+        const url = `${this.config.apiUrl}/v1/workflows/run`;
+        const body = {
             inputs: {
-                query: query,
+                query,
                 language: context?.language || 'unknown',
                 query_type: context?.queryType || '问题解答',
                 project_context: context?.projectContext || ''
@@ -301,96 +112,48 @@ export class DifyClient {
         };
 
         const response = await this.request(url, body);
-
         return {
-            answer: response.data?.outputs?.answer || '',
+            answer: response.data?.outputs?.answer || response.answer || '',
             conversationId: '',
             messageId: '',
             toolCalls: []
         };
     }
 
-    /**
-     * 查询代码补全（带 RAG）
-     */
-    async queryCodeCompletion(
-        codeContext: string,
-        language: string,
-        completionType: string
-    ): Promise<string> {
-        const response = await this.queryKnowledge(
-            `请补全以下 ${language} 代码`,
-            {
-                language,
-                queryType: '代码补全',
-                projectContext: `代码上下文：\n${codeContext}\n补全类型：${completionType}`
-            }
-        );
-
+    async queryCodeCompletion(codeContext: string, language: string, completionType: string): Promise<string> {
+        const response = await this.queryKnowledge(`请补全以下 ${language} 代码`, {
+            language, queryType: '代码补全',
+            projectContext: `代码上下文：\n${codeContext}\n补全类型：${completionType}`
+        });
         return response.answer;
     }
 
-    /**
-     * 查询代码审查（带 RAG）
-     */
-    async queryCodeReview(
-        codeContent: string,
-        language: string,
-        reviewType: string
-    ): Promise<string> {
-        const response = await this.queryKnowledge(
-            `请审查以下 ${language} 代码`,
-            {
-                language,
-                queryType: '代码审查',
-                projectContext: `代码内容：\n${codeContent}\n审查类型：${reviewType}`
-            }
-        );
-
+    async queryCodeReview(codeContent: string, language: string, reviewType: string): Promise<string> {
+        const response = await this.queryKnowledge(`请审查以下 ${language} 代码`, {
+            language, queryType: '代码审查',
+            projectContext: `代码内容：\n${codeContent}\n审查类型：${reviewType}`
+        });
         return response.answer;
     }
 
-    /**
-     * 查询 API 文档
-     */
     async queryApiDoc(apiName: string, language: string): Promise<string> {
-        const response = await this.queryKnowledge(
-            `请提供 ${apiName} 的 API 文档和使用示例`,
-            {
-                language,
-                queryType: 'API 查询'
-            }
-        );
-
+        const response = await this.queryKnowledge(`请提供 ${apiName} 的 API 文档和使用示例`, {
+            language, queryType: 'API 查询'
+        });
         return response.answer;
     }
 
-    /**
-     * 查询项目架构
-     */
     async queryArchitecture(): Promise<string> {
-        const response = await this.queryKnowledge(
-            '请描述这个项目的整体架构和模块划分',
-            {
-                queryType: '架构查询'
-            }
-        );
-
+        const response = await this.queryKnowledge('请描述这个项目的整体架构和模块划分', {
+            queryType: '架构查询'
+        });
         return response.answer;
     }
 
-    /**
-     * 查询最佳实践
-     */
     async queryBestPractices(topic: string, language: string): Promise<string> {
-        const response = await this.queryKnowledge(
-            `请提供关于 ${topic} 的最佳实践`,
-            {
-                language,
-                queryType: '最佳实践'
-            }
-        );
-
+        const response = await this.queryKnowledge(`请提供关于 ${topic} 的最佳实践`, {
+            language, queryType: '最佳实践'
+        });
         return response.answer;
     }
 
@@ -398,34 +161,24 @@ export class DifyClient {
      * 发送聊天消息（blocking 模式）
      */
     async chat(query: string, systemPrompt?: string): Promise<ChatResponse> {
-        const url = new URL(`${this.config.apiUrl}/v1/chat-messages`);
-
+        const url = `${this.config.apiUrl}/v1/chat-messages`;
         const body: any = {
             inputs: {},
-            query: query,
+            query,
             response_mode: 'blocking',
             user: 'vscode-user'
         };
-
-        if (this.conversationId) {
-            body.conversation_id = this.conversationId;
-        }
-
-        if (systemPrompt) {
-            body.inputs = { system_prompt: systemPrompt };
-        }
+        if (this.conversationId) body.conversation_id = this.conversationId;
+        if (systemPrompt) body.inputs = { system_prompt: systemPrompt };
 
         const response = await this.request(url, body);
-
-        if (response.conversation_id) {
-            this.conversationId = response.conversation_id;
-        }
+        if (response.conversation_id) this.conversationId = response.conversation_id;
 
         this.messageHistory.push({ role: 'user', content: query });
-        this.messageHistory.push({ role: 'assistant', content: response.answer });
+        this.messageHistory.push({ role: 'assistant', content: response.answer || '' });
 
         return {
-            answer: response.answer,
+            answer: response.answer || '',
             conversationId: response.conversation_id || '',
             messageId: response.message_id || '',
             toolCalls: []
@@ -433,81 +186,51 @@ export class DifyClient {
     }
 
     /**
-     * 发送聊天消息（streaming 模式，支持 Agent 工具调用）
+     * 发送聊天消息（streaming 模式）
      */
     async chatStream(
         query: string,
         systemPrompt?: string,
         callbacks?: AgentCallbacks
     ): Promise<ChatResponse> {
-        const url = new URL(`${this.config.apiUrl}/v1/chat-messages`);
-
+        const url = `${this.config.apiUrl}/v1/chat-messages`;
         const body: any = {
             inputs: {},
-            query: query,
+            query,
             response_mode: 'streaming',
             user: 'vscode-user'
         };
-
-        if (this.conversationId) {
-            body.conversation_id = this.conversationId;
-        }
-
-        if (systemPrompt) {
-            body.inputs = { system_prompt: systemPrompt };
-        }
+        if (this.conversationId) body.conversation_id = this.conversationId;
+        if (systemPrompt) body.inputs = { system_prompt: systemPrompt };
 
         let fullAnswer = '';
-        const toolCalls: ToolCall[] = [];
-        this.currentToolCalls.clear();
-
+        const toolCalls: ToolCallInfo[] = [];
         let streamStarted = false;
 
         await this.streamRequest(url, body, {
-            onMessage: (chunk, metadata) => {
+            onMessage: (chunk) => {
                 if (!streamStarted && callbacks?.onStreamStart) {
                     callbacks.onStreamStart();
                     streamStarted = true;
                 }
                 fullAnswer += chunk;
-                if (callbacks?.onStreamChunk) {
-                    callbacks.onStreamChunk(chunk);
-                }
+                callbacks?.onStreamChunk?.(chunk);
             },
             onAgentThought: (thought) => {
-                if (callbacks?.onAgentThought) {
-                    callbacks.onAgentThought(thought.thought || '');
-                }
-                // 如果有工具调用，记录它
+                callbacks?.onAgentThought?.(thought.thought || '');
                 if (thought.tool && thought.tool_input) {
-                    const toolCall: ToolCall = {
+                    toolCalls.push({
                         id: thought.tool_call_id || `tool_${Date.now()}`,
                         name: thought.tool,
                         arguments: thought.tool_input,
                         status: 'pending'
-                    };
-                    toolCalls.push(toolCall);
-                    this.currentToolCalls.set(toolCall.id, toolCall);
-                    if (callbacks?.onToolStart) {
-                        callbacks.onToolStart(thought.tool);
-                    }
-                }
-            },
-            onToolCallResult: (toolCallId, result) => {
-                const toolCall = this.currentToolCalls.get(toolCallId);
-                if (toolCall) {
-                    toolCall.status = 'completed';
-                    toolCall.result = result;
-                    if (callbacks?.onToolEnd) {
-                        callbacks.onToolEnd(toolCall.name, result);
-                    }
+                    });
+                    callbacks?.onToolStart?.(thought.tool);
                 }
             }
         });
 
-        if (streamStarted && callbacks?.onStreamEnd) {
-            callbacks.onStreamEnd();
-        }
+        if (streamStarted) callbacks?.onStreamEnd?.();
 
         this.messageHistory.push({ role: 'user', content: query });
         this.messageHistory.push({ role: 'assistant', content: fullAnswer });
@@ -516,19 +239,15 @@ export class DifyClient {
             answer: fullAnswer,
             conversationId: this.conversationId || '',
             messageId: '',
-            toolCalls: toolCalls
+            toolCalls
         };
     }
 
     /**
-     * 执行工具调用（通过本地工具服务器）
+     * 通过本地工具服务器执行工具
      */
     async executeTool(toolName: string, parameters: Record<string, any>): Promise<string> {
-        if (!this.toolServerPort) {
-            throw new Error('Tool server not started');
-        }
-
-        const url = new URL(`http://127.0.0.1:${this.toolServerPort}/execute`);
+        if (!this.toolServerPort) throw new Error('Tool server not started');
 
         return new Promise((resolve, reject) => {
             const req = http.request({
@@ -536,26 +255,20 @@ export class DifyClient {
                 port: this.toolServerPort,
                 path: '/execute',
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             }, (res) => {
                 let data = '';
                 res.on('data', chunk => data += chunk);
                 res.on('end', () => {
                     try {
                         const result = JSON.parse(data);
-                        if (result.error) {
-                            reject(new Error(result.error));
-                        } else {
-                            resolve(result.result);
-                        }
+                        if (result.error) reject(new Error(result.error));
+                        else resolve(result.result);
                     } catch (e) {
-                        reject(new Error(`Failed to parse tool result: ${data}`));
+                        reject(new Error(`Failed to parse tool result: ${data.substring(0, 200)}`));
                     }
                 });
             });
-
             req.on('error', reject);
             req.write(JSON.stringify({ tool: toolName, parameters }));
             req.end();
@@ -564,7 +277,9 @@ export class DifyClient {
 
     /**
      * Agent 工具调用循环
-     * 自动处理 Dify Agent 的工具调用请求
+     * 
+     * 策略：AI 返回的响应中如果包含 ```tool 代码块，解析并执行工具，
+     * 然后将结果格式化发回 Dify，直到 AI 不再请求工具调用。
      */
     async chatWithAgent(
         query: string,
@@ -575,77 +290,93 @@ export class DifyClient {
         let currentQuery = query;
         let iteration = 0;
         let fullAnswer = '';
-        const allToolCalls: ToolCall[] = [];
         const allToolResults: any[] = [];
+        const allToolCalls: ToolCallInfo[] = [];
 
         while (iteration < maxIterations) {
             iteration++;
+            callbacks?.onThinking?.();
 
-            if (callbacks?.onThinking) {
-                callbacks.onThinking();
-            }
+            // 发送到 Dify
+            const response = await this.chatStream(currentQuery, systemPrompt, callbacks);
 
-            const response = await this.chatStream(
-                currentQuery,
-                systemPrompt,
-                callbacks
-            );
-
-            fullAnswer += response.answer;
-            allToolCalls.push(...response.toolCalls);
-
-            // 如果没有工具调用，返回最终结果
-            if (response.toolCalls.length === 0) {
-                return {
-                    answer: fullAnswer,
-                    conversationId: response.conversationId,
-                    messageId: response.messageId,
-                    toolCalls: allToolCalls,
-                    toolResults: allToolResults
-                };
-            }
-
-            // 执行所有工具调用
-            const toolResults: ToolResult[] = [];
-            for (const toolCall of response.toolCalls) {
-                try {
-                    toolCall.status = 'running';
-                    const result = await this.executeTool(toolCall.name, toolCall.arguments);
-                    toolCall.status = 'completed';
-                    toolCall.result = result;
-                    toolResults.push({
-                        tool_call_id: toolCall.id,
-                        result: result
-                    });
-                    allToolResults.push({
-                        type: toolCall.name,
-                        data: result,
-                        success: true
-                    });
-                } catch (error: any) {
-                    toolCall.status = 'failed';
-                    toolCall.error = error.message;
-                    toolResults.push({
-                        tool_call_id: toolCall.id,
-                        result: '',
-                        error: error.message
-                    });
-                    allToolResults.push({
-                        type: toolCall.name,
-                        error: error.message,
-                        success: false
-                    });
+            // 检查 Dify Agent 原生工具调用
+            if (response.toolCalls.length > 0) {
+                for (const tc of response.toolCalls) {
+                    try {
+                        tc.status = 'running';
+                        callbacks?.onToolStart?.(tc.name);
+                        const result = await this.executeTool(tc.name, tc.arguments);
+                        tc.status = 'completed';
+                        tc.result = result;
+                        allToolResults.push({ type: tc.name, data: result, success: true });
+                        callbacks?.onToolEnd?.(tc.name, result);
+                    } catch (error: any) {
+                        tc.status = 'failed';
+                        tc.error = error.message;
+                        allToolResults.push({ type: tc.name, error: error.message, success: false });
+                        callbacks?.onToolEnd?.(tc.name, `Error: ${error.message}`);
+                    }
+                    allToolCalls.push(tc);
                 }
+
+                // 把工具结果格式化发回 Dify
+                const resultText = response.toolCalls.map(tc => {
+                    const status = tc.status === 'completed' ? 'Success' : 'Failed';
+                    const content = tc.result || tc.error || '';
+                    return `[Tool Result: ${tc.name}] ${status}\n${content}`;
+                }).join('\n\n');
+
+                currentQuery = resultText;
+                fullAnswer += response.answer;
+                continue;
             }
 
-            // 将工具结果发送回 Dify
-            const resultText = toolResults.map(r => {
-                const status = r.error ? 'Failed' : 'Success';
-                const content = r.error || r.result;
-                return `[Tool Result: ${r.tool_call_id}] ${status}\n${content}`;
-            }).join('\n\n');
+            // 检查 AI 返回的 ```tool 代码块
+            const toolBlocks = this.parseToolBlocks(response.answer);
+            if (toolBlocks.length > 0) {
+                fullAnswer += response.answer;
 
-            currentQuery = resultText;
+                for (const block of toolBlocks) {
+                    const toolCall: ToolCallInfo = {
+                        id: `tool_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                        name: block.tool,
+                        arguments: block.params,
+                        status: 'pending'
+                    };
+                    allToolCalls.push(toolCall);
+
+                    try {
+                        toolCall.status = 'running';
+                        callbacks?.onToolStart?.(block.tool);
+                        const result = await this.executeTool(block.tool, block.params);
+                        toolCall.status = 'completed';
+                        toolCall.result = result;
+                        allToolResults.push({ type: block.tool, data: result, success: true });
+                        callbacks?.onToolEnd?.(block.tool, result);
+                    } catch (error: any) {
+                        toolCall.status = 'failed';
+                        toolCall.error = error.message;
+                        allToolResults.push({ type: block.tool, error: error.message, success: false });
+                        callbacks?.onToolEnd?.(block.tool, `Error: ${error.message}`);
+                    }
+                }
+
+                // 把工具结果格式化发回
+                const resultText = toolBlocks.map((block, i) => {
+                    const tc = allToolCalls[allToolCalls.length - toolBlocks.length + i];
+                    const status = tc.status === 'completed' ? 'Success' : 'Failed';
+                    const content = tc.result || tc.error || '';
+                    return `[Tool Result: ${block.tool}] ${status}\n${content}`;
+                }).join('\n\n');
+
+                currentQuery = resultText;
+                continue;
+            }
+
+            // 没有工具调用 — 最终回答
+            fullAnswer += response.answer;
+            break;
         }
 
         return {
@@ -657,15 +388,81 @@ export class DifyClient {
         };
     }
 
-    private request(url: URL, body: any): Promise<any> {
+    /**
+     * 解析 AI 返回中的 ```tool 代码块
+     * 格式：
+     * ```tool
+     * tool_name: read_file
+     * path: src/main.ts
+     * ```
+     */
+    private parseToolBlocks(answer: string): { tool: string; params: Record<string, any> }[] {
+        const blocks: { tool: string; params: Record<string, any> }[] = [];
+        const regex = /```tool\s*\n([\s\S]*?)```/g;
+        let match;
+
+        while ((match = regex.exec(answer)) !== null) {
+            const block = match[1].trim();
+            const params: Record<string, any> = {};
+            let toolName = '';
+
+            for (const line of block.split('\n')) {
+                const colonIdx = line.indexOf(':');
+                if (colonIdx < 0) continue;
+
+                const key = line.substring(0, colonIdx).trim();
+                const value = line.substring(colonIdx + 1).trim();
+
+                if (key === 'tool_name' || key === 'tool') {
+                    toolName = value;
+                } else if (key) {
+                    // 尝试解析 JSON 值
+                    try {
+                        params[key] = JSON.parse(value);
+                    } catch {
+                        params[key] = value;
+                    }
+                }
+            }
+
+            if (toolName) {
+                blocks.push({ tool: toolName, params });
+            }
+        }
+
+        return blocks;
+    }
+
+    // ═══════════════════════════════════════════════
+    //  HTTP Helpers
+    // ═══════════════════════════════════════════════
+
+    private async httpGet(url: string): Promise<any> {
         return new Promise((resolve, reject) => {
-            const isHttps = url.protocol === 'https:';
+            const parsedUrl = new URL(url);
+            const transport = parsedUrl.protocol === 'https:' ? https : http;
+            const req = transport.get(url, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                    try { resolve(JSON.parse(data)); }
+                    catch { reject(new Error(`Invalid JSON: ${data.substring(0, 200)}`)); }
+                });
+            });
+            req.on('error', reject);
+        });
+    }
+
+    private request(url: string, body: any): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const parsedUrl = new URL(url);
+            const isHttps = parsedUrl.protocol === 'https:';
             const transport = isHttps ? https : http;
 
             const options = {
-                hostname: url.hostname,
-                port: url.port || (isHttps ? 443 : 80),
-                path: url.pathname,
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (isHttps ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
@@ -675,13 +472,10 @@ export class DifyClient {
 
             const req = transport.request(options, (res) => {
                 let data = '';
-                res.on('data', (chunk) => { data += chunk; });
+                res.on('data', chunk => data += chunk);
                 res.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch (e) {
-                        reject(new Error(`Failed to parse response: ${data}`));
-                    }
+                    try { resolve(JSON.parse(data)); }
+                    catch { reject(new Error(`Invalid JSON response: ${data.substring(0, 300)}`)); }
                 });
             });
 
@@ -692,22 +486,22 @@ export class DifyClient {
     }
 
     private streamRequest(
-        url: URL,
+        url: string,
         body: any,
         handlers: {
             onMessage: (chunk: string, metadata?: any) => void;
-            onAgentThought?: (thought: AgentThought) => void;
-            onToolCallResult?: (toolCallId: string, result: string) => void;
+            onAgentThought?: (thought: { thought: string; tool?: string; tool_input?: Record<string, any>; tool_call_id?: string }) => void;
         }
     ): Promise<void> {
         return new Promise((resolve, reject) => {
-            const isHttps = url.protocol === 'https:';
+            const parsedUrl = new URL(url);
+            const isHttps = parsedUrl.protocol === 'https:';
             const transport = isHttps ? https : http;
 
             const options = {
-                hostname: url.hostname,
-                port: url.port || (isHttps ? 443 : 80),
-                path: url.pathname,
+                hostname: parsedUrl.hostname,
+                port: parsedUrl.port || (isHttps ? 443 : 80),
+                path: parsedUrl.pathname + parsedUrl.search,
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
@@ -724,48 +518,28 @@ export class DifyClient {
                     buffer = lines.pop() || '';
 
                     for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
+                        if (!line.startsWith('data: ')) continue;
 
-                                // 处理消息事件
-                                if (data.event === 'message' && data.answer) {
-                                    handlers.onMessage(data.answer, data.metadata);
-                                }
+                        try {
+                            const data = JSON.parse(line.slice(6));
 
-                                // 处理 Agent 思考/工具调用事件
-                                if (data.event === 'agent_thought') {
-                                    const thought: AgentThought = {
-                                        id: data.id || '',
-                                        thought: data.thought || '',
-                                        tool: data.tool || undefined,
-                                        tool_input: data.tool_input || undefined,
-                                        tool_call_id: data.tool_call_id || undefined,
-                                        observation: data.observation || undefined,
-                                        created_at: data.created_at || Date.now()
-                                    };
-                                    if (handlers.onAgentThought) {
-                                        handlers.onAgentThought(thought);
-                                    }
-                                }
-
-                                // 处理工具调用结果事件
-                                if (data.event === 'tool_call_result') {
-                                    if (handlers.onToolCallResult) {
-                                        handlers.onToolCallResult(
-                                            data.tool_call_id || '',
-                                            data.result || ''
-                                        );
-                                    }
-                                }
-
-                                if (data.conversation_id) {
-                                    this.conversationId = data.conversation_id;
-                                }
-                            } catch {
-                                // Skip invalid JSON
+                            if (data.event === 'message' && data.answer) {
+                                handlers.onMessage(data.answer, data.metadata);
                             }
-                        }
+
+                            if (data.event === 'agent_thought' && handlers.onAgentThought) {
+                                handlers.onAgentThought({
+                                    thought: data.thought || '',
+                                    tool: data.tool || undefined,
+                                    tool_input: data.tool_input || undefined,
+                                    tool_call_id: data.tool_call_id || undefined
+                                });
+                            }
+
+                            if (data.conversation_id) {
+                                this.conversationId = data.conversation_id;
+                            }
+                        } catch { /* skip invalid JSON */ }
                     }
                 });
 
