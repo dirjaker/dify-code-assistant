@@ -4,7 +4,7 @@
 
 <br>
 
-### 基于 Dify 的 VS Code AI 编程助手 · v2.0
+### 基于 Dify 的 VS Code AI 编程助手 · v2.1
 
 [![Stars](https://img.shields.io/github/stars/dirjaker/dify-code-assistant?style=flat-square&label=Stars&color=FFD700)](https://github.com/dirjaker/dify-code-assistant/stargazers)
 [![Forks](https://img.shields.io/github/forks/dirjaker/dify-code-assistant?style=flat-square&label=Forks&color=4A90D9)](https://github.com/dirjaker/dify-code-assistant/network/members)
@@ -84,7 +84,7 @@
 
 **方式一：下载 VSIX 安装包（推荐）**
 
-1. 从 [Releases](https://github.com/dirjaker/dify-code-assistant/releases) 下载最新 `dify-code-assistant-2.0.0.vsix`
+1. 从 [Releases](https://github.com/dirjaker/dify-code-assistant/releases) 下载最新 `dify-code-assistant-2.1.0.vsix`
 2. VS Code 中按 `Ctrl+Shift+P`（Mac: `Cmd+Shift+P`）
 3. 输入 `Extensions: Install from VSIX...`
 4. 选择下载的 `.vsix` 文件
@@ -97,7 +97,7 @@ cd dify-code-assistant
 npm install
 npm run compile
 npm run package
-# 生成 dify-code-assistant-2.0.0.vsix
+# 生成 dify-code-assistant-2.1.0.vsix
 ```
 
 ### 第二步：配置 Dify 平台
@@ -644,7 +644,7 @@ A: 检查：
 
 ### Q: 流式输出卡顿
 
-A: v2.0 已优化为 requestAnimationFrame 批量更新。如果仍然卡顿：
+A: v2.0+ 已优化为 requestAnimationFrame 批量更新。如果仍然卡顿：
 1. 检查网络延迟
 2. 减小 `dify.maxTokens` 值
 3. 使用更快的模型（如 deepseek-v4-flash）

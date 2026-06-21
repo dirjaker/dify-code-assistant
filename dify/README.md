@@ -1,6 +1,6 @@
 # Dify 平台配置指南
 
-本目录包含配合 `dify-code-assistant` v2.0 插件使用的所有 Dify 配置文件。
+本目录包含配合 `dify-code-assistant` v2.1 插件使用的所有 Dify 配置文件。
 
 ## 文件说明
 
@@ -168,6 +168,46 @@ LLM 节点：
 结束节点输出：
   - answer ← llm-node.text
 ```
+
+## 工具系统说明（v2.1.0）
+
+v2.1.0 统一了工具执行架构：
+
+- **所有 12 个工具** 统一通过 `toolServer.ts`（本地 HTTP 工具服务器）执行
+- 旧的 5 工具实现（toolExecutor）已删除，只保留 diff 确认流程
+- 工具服务器支持 Bearer Token 认证和 CORS 限制
+
+### 工具调用协议
+
+AI 在回答中使用 ` ```tool ` 代码块调用工具：
+
+````markdown
+```tool
+tool_name: read_file
+path: src/main.ts
+start_line: 1
+end_line: 50
+```
+````
+
+插件解析执行后，结果以 `[Tool Result]` 格式发回。
+
+### 12 种工具
+
+| 工具 | 功能 |
+|------|------|
+| `read_file` | 读取文件内容（带行号） |
+| `write_file` | 创建或覆写文件 |
+| `edit_file` | 精确替换文件中的文本 |
+| `search_files` | 正则搜索代码 |
+| `list_files` | 列出目录结构 |
+| `execute_command` | 执行 Shell 命令 |
+| `create_directory` | 创建目录 |
+| `delete_file` | 删除文件/目录 |
+| `move_file` | 移动/重命名 |
+| `get_diagnostics` | 获取诊断信息 |
+| `insert_code` | 在指定行插入代码 |
+| `get_symbols` | 提取文件中的符号 |
 
 ## 自定义修改
 

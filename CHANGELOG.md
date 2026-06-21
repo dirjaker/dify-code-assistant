@@ -1,5 +1,28 @@
 # Changelog
 
+## [2.1.0] — 2026-06-22
+
+### ⚙️ 工具系统统一
+- 删除旧 5 工具实现（toolExecutor），只保留 diff 确认流程
+- 所有 12 个工具统一走 `toolServer.ts`（HTTP 工具服务器）
+
+### 🔒 SSE 流式解析加固
+- 按 `\n\n` 分割完整事件块，不再按单个 `\n` 分割行
+- 避免 chunk 边界丢失事件，提升流式输出稳定性
+
+### 🛡️ 大文件保护
+- `diffEngine` 对超过 5000 行的文件跳过 O(n²) LCS 算法
+- 使用简单逐行 diff，避免大文件 OOM
+
+### 📦 上下文缓存改进
+- `contextCollector` 缓存带 5 分钟 TTL
+- 监听 `onDidChangeTextDocument` 自动清除对应缓存
+
+### 🎨 前端体验优化
+- 引入 Google Fonts CDN 加载 Noto Sans SC（CJK 字体支持）
+- textarea 自动高度：随内容扩展，最大 120px
+- 错误消息优化：ECONNREFUSED / 401 给出具体排查步骤
+
 ## [2.0.0] — 2026-06-14
 
 ### 🔧 工具系统重构
