@@ -9,6 +9,8 @@ import { InlineChatProvider } from './chatInlineProvider';
 import { WorkspaceIndexer } from './workspaceIndexer';
 import { getConfig, validateConfig } from './config';
 import { LocalToolServer } from './toolServer';
+import { ContextCollector } from './contextCollector';
+import { RAGCompletionProvider } from './ragCompletionProvider';
 
 let client: DifyClient;
 let completionProvider: CompletionProvider;
@@ -19,6 +21,8 @@ let decorationManager: DecorationManager;
 let inlineChatProvider: InlineChatProvider;
 let workspaceIndexer: WorkspaceIndexer;
 let toolServer: LocalToolServer;
+let contextCollector: ContextCollector;
+let ragCompletionProvider: RAGCompletionProvider;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Dify Code Assistant is now active!');
@@ -29,6 +33,10 @@ export function activate(context: vscode.ExtensionContext) {
     fileSystem = new FileSystemProvider();
     modeManager = new ModeManager();
     decorationManager = new DecorationManager();
+
+    // 初始化上下文收集器
+    const workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+    contextCollector = new ContextCollector(workspaceRoot);
 
     // 注册侧边栏视图
     chatViewProvider = new ChatViewProvider(context.extensionUri, client, fileSystem, modeManager, decorationManager, context, workspaceIndexer);
@@ -77,10 +85,21 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 注册代码补全
     completionProvider = new CompletionProvider(client);
+    ragCompletionProvider = new RAGCompletionProvider(client, contextCollector);
+    
+    // 注册普通补全
     context.subscriptions.push(
         vscode.languages.registerInlineCompletionItemProvider(
             { pattern: '**' },
             completionProvider
+        )
+    );
+    
+    // 注册 RAG 增强补全
+    context.subscriptions.push(
+        vscode.languages.registerInlineCompletionItemProvider(
+            { pattern: '**' },
+            ragCompletionProvider
         )
     );
 
@@ -120,6 +139,91 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
         vscode.commands.registerCommand('dify.settings', () => {
             vscode.commands.executeCommand('workbench.action.openSettings', 'dify');
+        })
+    );
+
+    // RAG 知识库查询命令
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dify.queryKnowledge', async () => {
+            const query = await vscode.window.showInputBox({
+                prompt: '输入查询内容',
+                placeHolder: '例如: 如何使用 DifyClient'
+            });
+            if (query) {
+                try {
+                    const result = await client.queryKnowledge(query);
+                    // 显示结果
+                    const panel = vscode.window.createWebviewPanel(
+                        'knowledgeResult',
+                        '知识库查询结果',
+                        vscode.ViewColumn.Beside,
+                        { enableScripts: true }
+                    );
+                    panel.webview.html = `
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <style>
+                                body {
+                                    font-family: var(--vscode-font-family);
+                                    padding: 20px;
+                                    color: var(--vscode-foreground);
+                                }
+                                pre {
+                                    background: var(--vscode-editor-background);
+                                    padding: 12px;
+                                    border-radius: 6px;
+                                    overflow-x: auto;
+                                }
+                                code {
+                                    font-family: var(--vscode-editor-font-family);
+                                }
+                            </style>
+                        </head>
+                        <body>
+                            <h2>查询: ${query}</h2>
+                            <div>${result.answer.replace(/\n/g, '<br>')}</div>
+                        </body>
+                        </html>
+                    `;
+                } catch (error: any) {
+                    vscode.window.showErrorMessage(`查询失败: ${error.message}`);
+                }
+            }
+        })
+    );
+
+    // 查询项目架构命令
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dify.queryArchitecture', async () => {
+            try {
+                const result = await client.queryArchitecture();
+                vscode.window.showInformationMessage('架构查询完成，请查看输出');
+                console.log('Architecture:', result);
+            } catch (error: any) {
+                vscode.window.showErrorMessage(`查询失败: ${error.message}`);
+            }
+        })
+    );
+
+    // 查询最佳实践命令
+    context.subscriptions.push(
+        vscode.commands.registerCommand('dify.queryBestPractices', async () => {
+            const topic = await vscode.window.showInputBox({
+                prompt: '输入主题',
+                placeHolder: '例如: 代码规范、设计模式'
+            });
+            if (topic) {
+                try {
+                    const editor = vscode.window.activeTextEditor;
+                    const language = editor?.document.languageId || 'unknown';
+                    const result = await client.queryBestPractices(topic, language);
+                    vscode.window.showInformationMessage('最佳实践查询完成，请查看输出');
+                    console.log('Best Practices:', result);
+                } catch (error: any) {
+                    vscode.window.showErrorMessage(`查询失败: ${error.message}`);
+                }
+            }
         })
     );
 

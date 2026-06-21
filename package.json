@@ -70,6 +70,21 @@
         "command": "dify.inlineChat",
         "title": "AI: Inline Chat",
         "icon": "$(comment)"
+      },
+      {
+        "command": "dify.queryKnowledge",
+        "title": "AI: Query Knowledge Base",
+        "icon": "$(book)"
+      },
+      {
+        "command": "dify.queryArchitecture",
+        "title": "AI: Query Architecture",
+        "icon": "$(symbol-structure)"
+      },
+      {
+        "command": "dify.queryBestPractices",
+        "title": "AI: Query Best Practices",
+        "icon": "$(lightbulb)"
       }
     ],
     "configuration": {
