@@ -532,11 +532,15 @@
     var streamingContent = null;
     var userScrolledUp = false;
     var lastTerminalCmd = '';
+    var streamingBuffer = '';
+    var streamRafPending = false;
 
     function escapeHtml(text) {
-        var div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     function formatMarkdown(text) {
@@ -558,8 +562,11 @@
         // Bold
         html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
-        // Italic
-        html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+        // Italic — skip content already wrapped in <strong>
+        html = html.replace(/\*([^*]+)\*/g, function(match, content) {
+            if (match.indexOf('<strong>') !== -1) return match;
+            return '<em>' + content + '</em>';
+        });
 
         // Links
         html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
@@ -642,8 +649,17 @@
 
     function appendStreamChunk(chunk) {
         if (!streamingContent) return;
-        streamingContent.innerHTML += escapeHtml(chunk);
-        if (!userScrolledUp) scrollToBottom();
+        streamingBuffer += escapeHtml(chunk);
+        if (!streamRafPending) {
+            streamRafPending = true;
+            requestAnimationFrame(function() {
+                if (streamingContent) {
+                    streamingContent.innerHTML = streamingBuffer;
+                }
+                streamRafPending = false;
+                if (!userScrolledUp) scrollToBottom();
+            });
+        }
     }
 
     function endStream() {
@@ -666,6 +682,8 @@
         streamingStep = null;
         streamingContent = null;
         userScrolledUp = false;
+        streamingBuffer = '';
+        streamRafPending = false;
     }
 
     function showToolResult(type, data) {
@@ -703,6 +721,85 @@
         content.className = 'step-content';
         content.innerHTML = html;
         step.appendChild(content);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    // ═══════════════════════════════════════
+    // Tool Execution / Agent Thought Handlers
+    // ═══════════════════════════════════════
+
+    function showToolStart(toolName) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        var step = document.createElement('div');
+        step.className = 'step tool-exec';
+        step.setAttribute('data-tool', toolName);
+
+        var header = document.createElement('div');
+        header.className = 'tool-exec-header';
+        header.innerHTML = '<span class="tool-exec-icon">🔧</span>' +
+            '<span class="tool-exec-name">' + escapeHtml(toolName) + '</span>' +
+            '<span class="tool-exec-status loading"><span class="tool-spinner"></span></span>';
+        step.appendChild(header);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    function showToolEnd(toolName, result) {
+        var step = stepsArea.querySelector('.step.tool-exec[data-tool="' + toolName + '"]');
+        if (!step) return;
+
+        var statusEl = step.querySelector('.tool-exec-status');
+        if (statusEl) {
+            statusEl.className = 'tool-exec-status success';
+            statusEl.innerHTML = '✓ Done';
+        }
+
+        if (result) {
+            var resultDiv = document.createElement('div');
+            resultDiv.className = 'tool-exec-result';
+            resultDiv.textContent = result.length > 500 ? result.substring(0, 500) + '...' : result;
+            step.appendChild(resultDiv);
+        }
+        scrollToBottom();
+    }
+
+    function showAgentThought(thought) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        var step = document.createElement('div');
+        step.className = 'step thought-step';
+
+        var content = document.createElement('div');
+        content.className = 'thought-content';
+        content.textContent = thought;
+        step.appendChild(content);
+
+        stepsArea.insertBefore(step, thinkingEl);
+        scrollToBottom();
+    }
+
+    function showToolError(type, error) {
+        if (welcomeEl) welcomeEl.style.display = 'none';
+
+        var step = document.createElement('div');
+        step.className = 'step tool-exec';
+
+        var header = document.createElement('div');
+        header.className = 'tool-exec-header';
+        header.innerHTML = '<span class="tool-exec-icon">⚠️</span>' +
+            '<span class="tool-exec-name">' + escapeHtml(type || 'Error') + '</span>' +
+            '<span class="tool-exec-status error">✗ Error</span>';
+        step.appendChild(header);
+
+        var resultDiv = document.createElement('div');
+        resultDiv.className = 'tool-exec-result';
+        resultDiv.style.color = 'var(--error)';
+        resultDiv.textContent = error || 'Unknown error';
+        step.appendChild(resultDiv);
 
         stepsArea.insertBefore(step, thinkingEl);
         scrollToBottom();
@@ -879,14 +976,12 @@
             case 'startThinking':
                 if (thinkingEl) {
                     thinkingEl.style.display = 'flex';
-                    thinkingEl.classList.add('show');
                 }
                 if (sendBtnEl) sendBtnEl.disabled = true;
                 break;
             case 'stopThinking':
                 if (thinkingEl) {
-                    thinkingEl.classList.remove('show');
-                    thinkingEl.style.display = '';
+                    thinkingEl.style.display = 'none';
                 }
                 if (sendBtnEl) sendBtnEl.disabled = false;
                 focusInput();
@@ -895,7 +990,7 @@
                 var steps = stepsArea.querySelectorAll('.step');
                 steps.forEach(function(s) { s.remove(); });
                 if (welcomeEl) welcomeEl.style.display = '';
-                if (thinkingEl) thinkingEl.style.display = '';
+                if (thinkingEl) thinkingEl.style.display = 'none';
                 break;
             case 'modeChanged':
                 setMode(msg.mode);
@@ -942,6 +1037,18 @@
                 break;
             case 'terminalResult':
                 showTerminalResult(msg.stdout, msg.stderr, msg.code);
+                break;
+            case 'toolStart':
+                showToolStart(msg.toolName);
+                break;
+            case 'toolEnd':
+                showToolEnd(msg.toolName, msg.result);
+                break;
+            case 'agentThought':
+                showAgentThought(msg.thought);
+                break;
+            case 'toolError':
+                showToolError(msg.type, msg.error);
                 break;
             case 'runTerminal':
                 if (msg.commandText) {
