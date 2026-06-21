@@ -1,114 +1,69 @@
 # Changelog
 
-所有 notable changes 记录在此文件中。格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.0.0/)。
+## [2.0.0] — 2026-06-14
 
-## [1.2.0] - 2026-06-17
+### 🔧 工具系统重构
+- **12 个工具**完整实现：`read_file`, `write_file`, `edit_file`, `search_files`, `list_files`, `execute_command`, `create_directory`, `delete_file`, `move_file`, `get_diagnostics`, `insert_code`, `get_symbols`
+- `edit_file` 从全量覆写改为**精确替换**（old_text 唯一匹配）
+- 工具服务器加入 **Bearer Token 认证**，限制 CORS 来源
+- 多语言符号提取：JS/TS/Python/Go/Rust/Java
 
-### 新增功能
+### 🤖 Agent 工具循环
+- 重写 `chatWithAgent`：AI 返回 ` ```tool ` 代码块 → 解析 → 执行 → 结果格式化发回
+- 支持**多行值**（如 write_file 的 content 跨多行）
+- Agent 循环用独立历史，不污染全局 `messageHistory`
+- 支持 Dify 原生工具调用 + 自定义 tool block 两种模式
 
-- **Agent 原生工具调用** — 支持 Dify Agent 原生工具调用协议
-- **本地工具服务器** — 扩展启动时自动启动 HTTP 工具服务器（随机端口）
-- **自动工具注册** — 启动时自动向 Dify 注册工具提供者
-- **6 种工具支持** — read_file、edit_file、run_process、run_terminal、list_files、search_code
-- **工具调用循环** — 自动处理 Agent 的多轮工具调用请求
+### 🎨 前端全面修复
+- 补全 4 个缺失的消息处理器：`toolStart`, `toolEnd`, `agentThought`, `toolError`
+- **流式性能优化**：`innerHTML +=` → `streamingBuffer` + `requestAnimationFrame` 批量更新
+- `escapeHtml` 从 DOM 创建改为纯字符串替换
+- Markdown 渲染修复：`**bold**` 不再被 `*italic*` 正则破坏
+- 新增工具执行步骤 UI（spinner loading + 状态指示 + 结果折叠）
+- 新增 Agent 推理展示（斜体灰色左边框）
+- thinking indicator 默认隐藏，统一显隐逻辑
 
-### Bug 修复
+### 🛡️ 安全修复
+- XSS 漏洞：`knowledgeResultHtml` 对 HTML 转义
+- CORS `*` → 限制为 `vscode-webview://*` + Token 认证
+- `request()` 检查 HTTP 状态码，4xx/5xx 正确 reject
 
-- 修复 `run_terminal` 工具使用 `setTimeout` 不可靠的问题，改用 `child_process.exec`
-- 修复 `run_process` 使用 `require` 而非 import 的问题
-- 修复 `registerTools` OpenAPI schema 不完整的问题，添加所有工具参数定义
-- 修复 `chatPanel.ts` 访问不存在的 `toolResult.filePath` 和 `toolResult.diff` 的问题
-- 添加 `toolError` 消息类型处理工具执行失败
+### 🐛 Bug 修复
+- `workspaceIndexer` 初始化顺序错误（使用前未创建）→ 提前初始化
+- 双 `InlineCompletionItemProvider` 冲突 → 只注册一个，config 切换
+- `extensionContext` 非空断言 → 改为必填参数
+- `activeTextEditor!` 崩溃 → null 检查
+- `chatInlineProvider` Panel 闭包捕获旧上下文 → 实例变量保存
+- `DifyConfig` 接口重复定义 → 统一从 config.ts 导入
+- `completionProvider.chat()` 污染全局历史 → 改用 `queryCodeCompletion`
+- `workspaceIndexer.buildIndex` 竞态条件 → `indexingPromise` 模式
+- `error.message` 可能 undefined → `instanceof Error` 判断
 
-### 优化
+### ⚙️ 配置
+- 新增 `dify.enableRagCompletion` 配置项，切换 RAG 增强补全
+- 删除冗余的 `tools.ts` 文件
 
-- 统一 `run_terminal` 和 `run_process` 的实现
-- 增加 `maxBuffer` 到 10MB
-- 改进错误处理和日志输出
-- 完善 OpenAPI schema，使用 `oneOf` 区分不同工具的参数结构
+---
 
-### 文档
+## [1.2.0] — 2026-06-13
 
-- 更新 README，添加 Agent 工具调用说明
-- 添加工具服务器测试脚本 `scripts/test-tools.sh`
-- 更新项目结构说明
+### Added
+- RAG 检索功能：知识库查询、架构查询、最佳实践查询
+- 上下文收集器（ContextCollector）
+- RAG 增强代码补全（RAGCompletionProvider）
+- 知识库建设脚本（build-knowledge-base.sh）
+- 知识库上传脚本（upload-to-dify.sh）
+- Dify Workflow 配置（code-completion, code-review, spec-generator, knowledge-retrieval）
 
-## [1.0.0] - 2026-06-17
+## [1.1.0] — 2026-06-12
 
-首个正式版本。
-
-### 核心功能
-
-- **侧边栏 AI 对话** — 基于 Webview 的侧边栏聊天面板，支持 Markdown 渲染和代码高亮
-- **代码操作** — 选中代码后右键菜单：解释、修复、重构、生成
-- **内联代码补全** — 基于上下文的智能补全建议，500ms 防抖 + 本地缓存
-- **一键复制/插入** — 代码块支持复制到剪贴板或直接插入编辑器
-
-### Dify 集成
-
-- 对接 Dify Chat API（`/v1/chat-messages`）
-- 支持 blocking 和 streaming 两种响应模式
-- 多轮对话上下文保持（conversation_id）
-- 可配置 API 地址、API Key、模型名称
-- 提供预配置 DSL 文件，一键导入 Dify 应用
-
-### 技术实现
-
-- 遵循 VS Code Webview 最佳实践：外部 JS/CSS 文件加载，CSP 安全策略
-- nonce 验证脚本安全性
-- `postMessage` 双向通信机制
-- Node.js 原生 `http`/`https` 模块发送请求
-- 配置变更自动热更新
-
-### UI / UX
-
-- VS Code 原生主题适配（亮色/暗色自动跟随）
-- 快捷操作按钮（解释代码、修复 Bug、重构、生成代码）
-- AI 思考中动画指示器
-- 键盘快捷键支持（`Ctrl+Shift+D` 打开面板，`Enter` 发送）
-- 状态栏快捷入口
-
-### 文档
-
-- 完整的 README 文档（安装、配置、使用、开发）
-- Dify 配置详细指南（`docs/dify-guide.md`）
-- Dify 应用 DSL 配置说明（`dify/README.md`）
-- MIT 开源许可证
-
-## [0.2.4] - 2026-06-16
-
-- 修正默认 API Key 配置
-- 上传 Dify DSL 配置文件
-
-## [0.2.3] - 2026-06-16
-
-- 参考 VS Code 官方 webview-view-sample 重构
-- 改为外部 JS 文件加载方案（`media/main.js` + `media/main.css`）
-- 彻底解决 CSP 策略限制问题
-
-## [0.2.2] - 2026-06-16
-
-- 使用 nonce 验证脚本安全性
-- 优化侧边栏 UI 设计
-
-## [0.2.1] - 2026-06-16
-
-- 修复所有按钮无响应问题
-- 使用 `addEventListener` 替代内联事件绑定
-
-## [0.2.0] - 2026-06-16
-
-- 从编辑器面板改为侧边栏显示模式
-- 全新 UI 设计
-- 添加快捷操作按钮
-
-## [0.1.1] - 2026-06-16
-
-- 修复回车发送消息问题
-- 中文化界面
-
-## [0.1.0] - 2026-06-16
-
-- 初始版本
-- 基本聊天功能
-- 代码解释、修复、重构命令
+### Added
+- Agent 原生工具调用（Dify agent_thought 事件）
+- 本地工具服务器（LocalToolServer）
+- Premium UI 设计（深色主题、紫色渐变、毛玻璃）
+- 多标签页支持
+- @文件引用自动补全
+- 斜杠命令系统
+- 会话历史管理
+- Inline Chat（Ctrl+I）
+- 右键菜单：Explain / Fix / Refactor / Complete

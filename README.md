@@ -4,7 +4,7 @@
 
 <br>
 
-### 基于 Dify 的 VS Code AI 编程助手
+### 基于 Dify 的 VS Code AI 编程助手 · v2.0
 
 [![Stars](https://img.shields.io/github/stars/dirjaker/dify-code-assistant?style=flat-square&label=Stars&color=FFD700)](https://github.com/dirjaker/dify-code-assistant/stargazers)
 [![Forks](https://img.shields.io/github/forks/dirjaker/dify-code-assistant?style=flat-square&label=Forks&color=4A90D9)](https://github.com/dirjaker/dify-code-assistant/network/members)
