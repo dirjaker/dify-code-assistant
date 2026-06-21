@@ -36,7 +36,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         fs: FileSystemProvider,
         modeManager: ModeManager,
         decorationManager: DecorationManager,
-        extensionContext?: vscode.ExtensionContext,
+        extensionContext: vscode.ExtensionContext,
         workspaceIndexer?: WorkspaceIndexer
     ) {
         this._client = client;
@@ -44,7 +44,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
         this._modeManager = modeManager;
         this._decorationManager = decorationManager;
         this._toolExecutor = new ToolExecutor(fs, modeManager, decorationManager);
-        this._extensionContext = extensionContext!;
+        this._extensionContext = extensionContext;
         this._workspaceIndexer = workspaceIndexer;
         this._registerSlashCommands();
     }
@@ -286,8 +286,9 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                 }
             }
 
-        } catch (error: any) {
-            this._postMessage({ command: 'receiveMessage', text: 'Error: ' + error.message, role: 'error' });
+        } catch (error: unknown) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this._postMessage({ command: 'receiveMessage', text: 'Error: ' + msg, role: 'error' });
         } finally {
             this._postMessage({ command: 'stopThinking' });
         }

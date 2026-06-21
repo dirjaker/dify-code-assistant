@@ -30,7 +30,7 @@ export interface KeyFile {
 
 export class WorkspaceIndexer {
     private index: WorkspaceIndex | null = null;
-    private indexing: boolean = false;
+    private indexingPromise: Promise<WorkspaceIndex | null> | null = null;
 
     /**
      * 构建或获取工作区索引
@@ -44,11 +44,19 @@ export class WorkspaceIndexer {
     }
 
     /**
-     * 构建索引
+     * 构建索引（带并发保护）
      */
     async buildIndex(): Promise<WorkspaceIndex | null> {
-        if (this.indexing) return this.index;
-        this.indexing = true;
+        if (this.indexingPromise) return this.indexingPromise;
+        this.indexingPromise = this._doBuildIndex();
+        try {
+            return await this.indexingPromise;
+        } finally {
+            this.indexingPromise = null;
+        }
+    }
+
+    private async _doBuildIndex(): Promise<WorkspaceIndex | null> {
 
         try {
             const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
@@ -71,8 +79,9 @@ export class WorkspaceIndexer {
             };
 
             return this.index;
-        } finally {
-            this.indexing = false;
+        } catch (error) {
+            console.error('Failed to build workspace index:', error);
+            return null;
         }
     }
 

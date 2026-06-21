@@ -9,6 +9,7 @@ export class InlineChatProvider {
     private client: DifyClient;
     private panel: vscode.WebviewPanel | null = null;
     private lastEditor: vscode.TextEditor | null = null;
+    private currentContext: { contextCode: string; selectedText: string; languageId: string; fileName: string; selection: vscode.Selection } | null = null;
 
     constructor(client: DifyClient) {
         this.client = client;
@@ -34,8 +35,11 @@ export class InlineChatProvider {
         // 获取上下文（前后各 20 行）
         const startLine = Math.max(0, selection.start.line - 20);
         const endLine = Math.min(editor.document.lineCount - 1, selection.end.line + 20);
-        const contextRange = new vscode.Range(startLine, 0, endLine, 0);
+        const contextRange = new vscode.Range(startLine, 0, endLine, editor.document.lineAt(endLine).text.length);
         const contextCode = editor.document.getText(contextRange);
+
+        // 保存当前上下文到实例变量（解决闭包捕获旧上下文问题）
+        this.currentContext = { contextCode, selectedText, languageId, fileName, selection };
 
         // 创建或复用 panel
         if (!this.panel) {
@@ -53,7 +57,9 @@ export class InlineChatProvider {
             this.panel.webview.onDidReceiveMessage(async (message) => {
                 switch (message.command) {
                     case 'ask':
-                        await this.handleAsk(message.text, contextCode, selectedText, languageId, fileName, selection);
+                        if (!this.currentContext) return;
+                        const ctx = this.currentContext;
+                        await this.handleAsk(message.text, ctx.contextCode, ctx.selectedText, ctx.languageId, ctx.fileName, ctx.selection);
                         break;
                     case 'insert':
                         await this.insertAtCursor(message.text);

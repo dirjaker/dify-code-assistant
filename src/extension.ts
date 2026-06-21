@@ -59,7 +59,10 @@ export function activate(context: vscode.ExtensionContext) {
     toolServer = new LocalToolServer(outputChannel);
     toolServer.start().then(port => {
         outputChannel.appendLine(`[Extension] Tool server started on port ${port}`);
+        const authToken = toolServer.getAuthToken();
         chatViewProvider.setToolServerPort(port);
+        client.setToolServerPort(port);
+        client.setToolAuthToken(authToken);
 
         // 尝试注册工具到 Dify（非阻塞）
         client.registerTools().then(success => {
@@ -81,23 +84,20 @@ export function activate(context: vscode.ExtensionContext) {
         })
     );
 
-    // 注册代码补全
+    // 注册代码补全（只注册一个 provider 避免冲突）
     completionProvider = new CompletionProvider(client);
     ragCompletionProvider = new RAGCompletionProvider(client, contextCollector);
     
-    context.subscriptions.push(
-        vscode.languages.registerInlineCompletionItemProvider(
-            { pattern: '**' },
-            completionProvider
-        )
-    );
-    
-    context.subscriptions.push(
-        vscode.languages.registerInlineCompletionItemProvider(
-            { pattern: '**' },
-            ragCompletionProvider
-        )
-    );
+    // 默认使用基础补全，可通过配置切换到 RAG 补全
+    if (config.enableRagCompletion) {
+        context.subscriptions.push(
+            vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, ragCompletionProvider)
+        );
+    } else {
+        context.subscriptions.push(
+            vscode.languages.registerInlineCompletionItemProvider({ pattern: '**' }, completionProvider)
+        );
+    }
 
     // ── 命令注册 ──
     context.subscriptions.push(
@@ -262,6 +262,10 @@ async function handleCodeAction(action: 'explain' | 'refactor' | 'fix' | 'comple
     }, 300);
 }
 
+function escapeHtml(s: string): string {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function knowledgeResultHtml(query: string, answer: string): string {
     return `<!DOCTYPE html>
 <html>
@@ -271,8 +275,8 @@ function knowledgeResultHtml(query: string, answer: string): string {
     code { font-family: var(--vscode-editor-font-family); }
 </style></head>
 <body>
-    <h2>${query}</h2>
-    <div>${answer.replace(/\n/g, '<br>')}</div>
+    <h2>${escapeHtml(query)}</h2>
+    <div>${escapeHtml(answer).replace(/\n/g, '<br>')}</div>
 </body></html>`;
 }
 

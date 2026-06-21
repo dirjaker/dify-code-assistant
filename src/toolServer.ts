@@ -11,6 +11,8 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as cp from 'child_process';
 
+import * as crypto from 'crypto';
+
 export interface ToolCallRequest {
     tool: string;
     parameters: Record<string, any>;
@@ -35,10 +37,12 @@ export class LocalToolServer {
     private handlers: Map<string, ToolHandler> = new Map();
     private outputChannel: vscode.OutputChannel;
     private workspaceRoot: string;
+    private authToken: string;
 
     constructor(outputChannel: vscode.OutputChannel) {
         this.outputChannel = outputChannel;
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
+        this.authToken = crypto.randomBytes(32).toString('hex');
         this.registerAllHandlers();
     }
 
@@ -466,9 +470,17 @@ export class LocalToolServer {
     async start(): Promise<number> {
         return new Promise((resolve, reject) => {
             this.server = http.createServer(async (req, res) => {
-                res.setHeader('Access-Control-Allow-Origin', '*');
+                // 安全：只允许本地请求，通过 token 认证
+                const authHeader = req.headers['authorization'];
+                if (req.method !== 'OPTIONS' && authHeader !== `Bearer ${this.authToken}`) {
+                    res.writeHead(401, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Unauthorized' }));
+                    return;
+                }
+
+                res.setHeader('Access-Control-Allow-Origin', 'vscode-webview://*');
                 res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-                res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+                res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
                 if (req.method === 'OPTIONS') {
                     res.writeHead(200);
@@ -509,7 +521,7 @@ export class LocalToolServer {
                     });
                 } else if (req.method === 'GET' && req.url === '/health') {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ status: 'ok', tools: Array.from(this.handlers.keys()) }));
+                    res.end(JSON.stringify({ status: 'ok', tools: Array.from(this.handlers.keys()), port: this.port }));
                 } else if (req.method === 'GET' && req.url === '/tools') {
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify(this.getToolDefinitions()));
@@ -542,6 +554,7 @@ export class LocalToolServer {
     }
 
     getPort(): number { return this.port; }
+    getAuthToken(): string { return this.authToken; }
 
     // ═══════════════════════════════════════════════
     //  Helpers
