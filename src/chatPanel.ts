@@ -731,11 +731,22 @@ ${modeSuffix}`;
         const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
         const session = sessions[sessionId];
         if (!session) return;
+
+        // Find or create a tab for this session
+        let tab = this._openTabs.find(t => t.id === sessionId);
+        if (!tab) {
+            const title = session.messages.length > 0 ? session.messages[0].text.slice(0, 20) : 'New Chat';
+            tab = { id: sessionId, title };
+            this._openTabs.push(tab);
+        }
+
+        this._activeTabId = sessionId;
         this._currentSessionId = session.id;
         this._chatHistory = session.messages;
         this._client.resetConversation();
         this._postMessage({ command: 'clearChat' });
         this._postMessage({ command: 'restoreHistory', messages: session.messages });
+        this._sendTabUpdate();
     }
 
     private _deleteSession(sessionId: string): void {
@@ -743,10 +754,24 @@ ${modeSuffix}`;
         const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
         delete sessions[sessionId];
         this._extensionContext.globalState.update('difyChatSessions', sessions);
+
+        // Remove any tab linked to this session
+        const tabIdx = this._openTabs.findIndex(t => t.id === sessionId);
+        if (tabIdx >= 0) {
+            this._openTabs.splice(tabIdx, 1);
+        }
+
+        // If deleting the active session, switch to another tab or create new
         if (this._currentSessionId === sessionId) {
             this._currentSessionId = '';
             this._chatHistory = [];
+            if (this._openTabs.length > 0) {
+                this._switchTab(this._openTabs[Math.min(tabIdx, this._openTabs.length - 1)].id);
+            } else {
+                this._newTab();
+            }
         }
+
         this._sendSessionList();
     }
 
@@ -783,13 +808,21 @@ ${modeSuffix}`;
                 createdAt: sessions[this._currentSessionId]?.createdAt || Date.now()
             };
             this._extensionContext.globalState.update('difyChatSessions', sessions);
-            // Update tab title with first user message
+
+            // Update tab title and link tab to session on first user message
             if (role === 'user' && this._chatHistory.length === 1) {
-                const tab = this._openTabs.find(t => t.id === this._activeTabId);
-                if (tab) {
-                    tab.title = text.slice(0, 20) || 'New Chat';
-                    tab.id = this._currentSessionId; // Link tab to session
-                    this._activeTabId = this._currentSessionId;
+                const activeTab = this._openTabs.find(t => t.id === this._activeTabId);
+                if (activeTab) {
+                    activeTab.title = text.slice(0, 20) || 'New Chat';
+                    // If this is a new tab (temp ID), replace with session ID
+                    if (activeTab.id !== this._currentSessionId) {
+                        const oldId = activeTab.id;
+                        activeTab.id = this._currentSessionId;
+                        // Update activeTabId if it pointed to the old temp ID
+                        if (this._activeTabId === oldId) {
+                            this._activeTabId = this._currentSessionId;
+                        }
+                    }
                 }
             }
             this._sendSessionList();
@@ -797,28 +830,41 @@ ${modeSuffix}`;
     }
 
     private _sendHistory(): void {
-        if (this._extensionContext) {
-            const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
-            this._sendSessionList();
-            const sessionIds = Object.keys(sessions).sort((a, b) => {
-                return (sessions[b].createdAt || 0) - (sessions[a].createdAt || 0);
-            });
-            if (sessionIds.length > 0) {
-                const latest = sessions[sessionIds[0]];
-                this._currentSessionId = latest.id;
-                this._chatHistory = latest.messages;
-                this._postMessage({ command: 'restoreHistory', messages: latest.messages });
-                // Initialize with one tab for latest session
-                if (this._openTabs.length === 0) {
-                    const title = latest.messages.length > 0 ? latest.messages[0].text.slice(0, 20) : 'New Chat';
-                    this._openTabs.push({ id: latest.id, title });
-                    this._activeTabId = latest.id;
-                }
-            } else if (this._openTabs.length === 0) {
-                this._newTab();
-            }
+        if (!this._extensionContext) return;
+
+        // Always send the session list for the history panel
+        this._sendSessionList();
+
+        // Only initialize state on first load (when no tabs exist yet)
+        if (this._openTabs.length > 0) {
+            // Already initialized — just send current tab state
             this._sendTabUpdate();
+            // Restore the current tab's messages in the webview
+            if (this._chatHistory.length > 0) {
+                this._postMessage({ command: 'restoreHistory', messages: this._chatHistory });
+            }
+            return;
         }
+
+        // First load — initialize from latest session
+        const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+        const sessionIds = Object.keys(sessions).sort((a, b) => {
+            return (sessions[b].createdAt || 0) - (sessions[a].createdAt || 0);
+        });
+
+        if (sessionIds.length > 0) {
+            const latest = sessions[sessionIds[0]];
+            this._currentSessionId = latest.id;
+            this._chatHistory = latest.messages;
+            const title = latest.messages.length > 0 ? latest.messages[0].text.slice(0, 20) : 'New Chat';
+            this._openTabs.push({ id: latest.id, title });
+            this._activeTabId = latest.id;
+            this._postMessage({ command: 'restoreHistory', messages: latest.messages });
+        } else {
+            this._newTab();
+        }
+
+        this._sendTabUpdate();
     }
 
     private _sendSessionList(): void {
@@ -868,19 +914,27 @@ ${modeSuffix}`;
         const tab = this._openTabs.find(t => t.id === tabId);
         if (!tab) return;
         this._activeTabId = tabId;
-        // Load session associated with this tab
-        if (this._extensionContext) {
+
+        // Clear current chat state first
+        this._postMessage({ command: 'clearChat' });
+
+        // Load session associated with this tab (tab ID === session ID after first message)
+        if (this._extensionContext && tabId.startsWith('session_')) {
             const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
-            // Find session for this tab
-            const session = Object.values(sessions).find(s => s.id === tabId || s.id === this._currentSessionId);
+            const session = sessions[tabId];
             if (session) {
                 this._currentSessionId = session.id;
                 this._chatHistory = session.messages;
                 this._client.resetConversation();
-                this._postMessage({ command: 'clearChat' });
                 this._postMessage({ command: 'restoreHistory', messages: session.messages });
             }
+        } else {
+            // New empty tab (temp ID) — reset state
+            this._currentSessionId = '';
+            this._chatHistory = [];
+            this._client.resetConversation();
         }
+
         this._sendTabUpdate();
     }
 
@@ -888,7 +942,8 @@ ${modeSuffix}`;
         const idx = this._openTabs.findIndex(t => t.id === tabId);
         if (idx < 0) return;
         this._openTabs.splice(idx, 1);
-        // If closing active tab, switch to another
+
+        // If closing the active tab, switch to another or create new
         if (this._activeTabId === tabId) {
             if (this._openTabs.length > 0) {
                 const newActive = this._openTabs[Math.min(idx, this._openTabs.length - 1)];

@@ -856,6 +856,15 @@
     }
 
     function restoreHistory(messages) {
+        // Clear existing steps first to prevent duplicates
+        var existingSteps = stepsArea.querySelectorAll('.step');
+        existingSteps.forEach(function(s) { s.remove(); });
+
+        if (!messages || messages.length === 0) {
+            if (welcomeEl) welcomeEl.style.display = '';
+            return;
+        }
+
         if (welcomeEl) welcomeEl.style.display = 'none';
         messages.forEach(function(msg) {
             appendStep(msg.text, msg.role);
@@ -1104,7 +1113,7 @@
     var sessionListEl = null;
 
     function updateSessionList(sessions) {
-        // Will be shown in a panel when user clicks history button
+        // Create session list container on first call
         if (!sessionListEl) {
             sessionListEl = document.createElement('div');
             sessionListEl.className = 'session-list';
@@ -1113,10 +1122,16 @@
                 inputArea.insertBefore(sessionListEl, inputArea.firstChild);
             }
         }
-        sessionListEl.innerHTML = '';
-        sessionListEl.style.display = 'none';
 
-        if (sessions.length <= 1) return;
+        // Preserve current visibility state (don't hide if user just opened it)
+        var wasVisible = sessionListEl.style.display !== 'none';
+        sessionListEl.innerHTML = '';
+
+        // Hide if fewer than 2 sessions (nothing to switch between)
+        if (!sessions || sessions.length <= 1) {
+            sessionListEl.style.display = 'none';
+            return;
+        }
 
         sessions.forEach(function(s) {
             var item = document.createElement('div');
@@ -1146,11 +1161,15 @@
             item.appendChild(delBtn);
             sessionListEl.appendChild(item);
         });
+
+        // Restore visibility state
+        sessionListEl.style.display = wasVisible ? 'block' : 'none';
     }
 
     function toggleSessionList() {
         if (!sessionListEl) return;
-        sessionListEl.style.display = sessionListEl.style.display === 'none' ? 'block' : 'none';
+        var isHidden = sessionListEl.style.display === 'none';
+        sessionListEl.style.display = isHidden ? 'block' : 'none';
     }
 
     focusInput();
