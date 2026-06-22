@@ -74,10 +74,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider {
                     await this._handleMessage(message.text);
                     break;
                 case 'clearChat':
-                    this._client.resetConversation();
-                    this._chatHistory = [];
-                    this._currentSessionId = '';
-                    this._postMessage({ command: 'clearChat' });
+                    this._clearCurrentChat();
                     break;
                 case 'setMode':
                     this._modeManager.setMode(message.mode as AgentMode);
@@ -594,9 +591,7 @@ ${modeSuffix}`;
         this._slashCommands.set('clear', {
             description: '清空对话',
             handler: async () => {
-                this._client.resetConversation();
-                this._chatHistory = [];
-                this._postMessage({ command: 'clearChat' });
+                this._clearCurrentChat();
                 return '';
             }
         });
@@ -747,6 +742,36 @@ ${modeSuffix}`;
         this._postMessage({ command: 'clearChat' });
         this._postMessage({ command: 'restoreHistory', messages: session.messages });
         this._sendTabUpdate();
+    }
+
+    /**
+     * 清空当前聊天 — 删除当前session + 重置tab
+     */
+    private _clearCurrentChat(): void {
+        // Delete current session from storage
+        if (this._extensionContext && this._currentSessionId) {
+            const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
+            delete sessions[this._currentSessionId];
+            this._extensionContext.globalState.update('difyChatSessions', sessions);
+        }
+
+        // Reset tab to "New Chat" with temp ID
+        const activeTab = this._openTabs.find(t => t.id === this._activeTabId);
+        if (activeTab) {
+            // If tab was linked to session, replace with new temp ID
+            if (activeTab.id.startsWith('session_')) {
+                const newTabId = 'tab_' + Date.now();
+                activeTab.id = newTabId;
+                this._activeTabId = newTabId;
+            }
+            activeTab.title = 'New Chat';
+        }
+
+        this._client.resetConversation();
+        this._chatHistory = [];
+        this._currentSessionId = '';
+        this._postMessage({ command: 'clearChat' });
+        this._sendSessionList();
     }
 
     private _deleteSession(sessionId: string): void {

@@ -1009,10 +1009,17 @@
                 focusInput();
                 break;
             case 'clearChat':
-                var steps = stepsArea.querySelectorAll('.step');
+                var steps = stepsArea ? stepsArea.querySelectorAll('.step') : [];
                 steps.forEach(function(s) { s.remove(); });
                 if (welcomeEl) welcomeEl.style.display = '';
                 if (thinkingEl) thinkingEl.style.display = 'none';
+                // Reset streaming state
+                streamingStep = null;
+                streamingContent = null;
+                streamingBuffer = '';
+                streamRafPending = false;
+                userScrolledUp = false;
+                if (sendBtnEl) sendBtnEl.disabled = false;
                 break;
             case 'modeChanged':
                 setMode(msg.mode);
