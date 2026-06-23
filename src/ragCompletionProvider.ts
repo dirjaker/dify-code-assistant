@@ -1,258 +1,130 @@
 import * as vscode from 'vscode';
 import { DifyClient } from './difyClient';
-import { ContextCollector } from './contextCollector';
+import { BaseCompletionProvider } from './baseCompletionProvider';
 
 /**
- * RAG 增强的代码补全提供者
- * 结合知识库检索和 LLM 生成
+ * RAG 增强的补全提供器
+ * 结合工作区上下文和知识库进行更精准的代码补全
  */
-export class RAGCompletionProvider implements vscode.InlineCompletionItemProvider {
-    private client: DifyClient;
-    private contextCollector: ContextCollector;
-    private cache: Map<string, string> = new Map();
-    private lastRequestTime: number = 0;
-    private debounceMs: number = 500;
-    private pendingRequest: AbortController | null = null;
+export class RAGCompletionProvider extends BaseCompletionProvider {
+    private workspaceRoot: string;
 
-    constructor(client: DifyClient, contextCollector: ContextCollector) {
-        this.client = client;
-        this.contextCollector = contextCollector;
+    constructor(client: DifyClient, workspaceRoot: string) {
+        super(client);
+        this.workspaceRoot = workspaceRoot;
     }
 
-    async provideInlineCompletionItems(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        context: vscode.InlineCompletionContext,
-        token: vscode.CancellationToken
-    ): Promise<vscode.InlineCompletionItem[]> {
-        // Debounce
-        const now = Date.now();
-        if (now - this.lastRequestTime < this.debounceMs) {
-            return [];
-        }
-        this.lastRequestTime = now;
+    protected async doCompletion(
+        textBefore: string,
+        textAfter: string,
+        languageId: string,
+        fileName: string,
+        signal: AbortSignal
+    ): Promise<string> {
+        // 收集文件上下文
+        const fileContext = await this.collectFileContext(fileName, languageId);
 
-        // Skip empty lines (unless continuing a pattern)
-        const lineText = document.lineAt(position).text;
-        const trimmed = lineText.trim();
-        if (trimmed.length === 0 && position.line > 0) {
-            // Check if previous line suggests continuation
-            const prevLine = document.lineAt(position.line - 1).text.trim();
-            if (!prevLine.endsWith(':') && !prevLine.endsWith('{') && !prevLine.endsWith('(')) {
-                return [];
-            }
-        }
+        // 构建 RAG 查询
+        const ragQuery = this.buildRAGQuery(
+            textBefore, textAfter, languageId, fileName, fileContext
+        );
 
-        // Skip inside strings and comments
-        if (this.isInStringOrComment(document, position)) {
-            return [];
-        }
-
-        // Get context
-        const textBefore = document.getText(new vscode.Range(
-            new vscode.Position(Math.max(0, position.line - 30), 0),
-            position
-        ));
-        const textAfter = document.getText(new vscode.Range(
-            position,
-            new vscode.Position(Math.min(document.lineCount - 1, position.line + 10), 0)
-        ));
-
-        // Check cache
-        const cacheKey = textBefore.slice(-300);
-        if (this.cache.has(cacheKey)) {
-            const cached = this.cache.get(cacheKey)!;
-            if (cached) {
-                return [new vscode.InlineCompletionItem(cached)];
-            }
-        }
-
-        // Cancel previous request
-        if (this.pendingRequest) {
-            this.pendingRequest.abort();
-        }
-        this.pendingRequest = new AbortController();
-
-        try {
-            const languageId = document.languageId;
-            const fileName = document.fileName.split(/[/\\]/).pop() || '';
-
-            // 收集上下文
-            const fileContext = await this.contextCollector.collectFileContext(document.fileName);
-            const editor = vscode.window.activeTextEditor;
-            if (!editor) return [];
-            const selectionContext = await this.contextCollector.collectSelectionContext(editor);
-
-            // 构建 RAG 查询
-            const ragQuery = this.buildRAGQuery(
-                textBefore,
-                textAfter,
-                languageId,
-                fileName,
-                fileContext
-            );
-
-            // 调用 RAG 增强的代码补全
-            const completion = await this.client.queryCodeCompletion(
-                ragQuery,
-                languageId,
-                this.detectCompletionType(textBefore, position)
-            );
-
-            if (completion && !token.isCancellationRequested) {
-                // 提取代码部分
-                const code = this.extractCode(completion, textBefore, position);
-                if (code) {
-                    this.cache.set(cacheKey, code);
-                    this.limitCache(100);
-                    return [new vscode.InlineCompletionItem(code)];
-                }
-            }
-        } catch {
-            // Silent fail for completions
-        }
-
-        return [];
+        return this.client.queryCodeCompletion(
+            ragQuery,
+            languageId,
+            this.detectCompletionType(textBefore),
+            signal
+        );
     }
 
-    /**
-     * 构建 RAG 查询
-     */
+    protected extractCompletion(
+        completion: string,
+        textBefore: string,
+        position: vscode.Position
+    ): string | null {
+        if (!completion) return null;
+
+        // 提取代码块
+        const codeBlockMatch = completion.match(/```(?:\w+)?\n([\s\S]*?)```/);
+        let code = codeBlockMatch ? codeBlockMatch[1].trim() : completion.trim();
+
+        // 移除可能的前缀
+        const lastLine = textBefore.split('\n').pop() || '';
+        if (code.startsWith(lastLine.trim())) {
+            code = code.substring(lastLine.trim().length);
+        }
+
+        return code.length > 0 ? code : null;
+    }
+
+    private async collectFileContext(fileName: string, languageId: string): Promise<string> {
+        const contextParts: string[] = [];
+
+        // 获取当前打开的文件列表
+        const openEditors = vscode.window.visibleTextEditors;
+        for (const editor of openEditors) {
+            if (editor.document.fileName !== fileName) {
+                const content = editor.document.getText();
+                const relativePath = vscode.workspace.asRelativePath(editor.document.fileName);
+                contextParts.push(`文件: ${relativePath}\n${content.substring(0, 2000)}`);
+            }
+        }
+
+        // 获取选中的文本
+        const activeEditor = vscode.window.activeTextEditor;
+        if (activeEditor && activeEditor.selections.length > 0) {
+            const selectedText = activeEditor.document.getText(activeEditor.selections[0]);
+            if (selectedText) {
+                contextParts.push(`选中的代码:\n${selectedText}`);
+            }
+        }
+
+        return contextParts.join('\n\n---\n\n');
+    }
+
     private buildRAGQuery(
         textBefore: string,
         textAfter: string,
-        language: string,
+        languageId: string,
         fileName: string,
-        fileContext: any
+        fileContext: string
     ): string {
-        const parts: string[] = [];
+        return `请补全以下 ${languageId} 代码。
 
-        // 添加文件信息
-        parts.push(`文件: ${fileName}`);
-        parts.push(`语言: ${language}`);
+文件名: ${fileName}
+工作区: ${this.workspaceRoot}
 
-        // 添加导入信息
-        if (fileContext.imports.length > 0) {
-            parts.push(`导入: ${fileContext.imports.slice(0, 5).join(', ')}`);
-        }
+当前文件上下文（光标前）:
+\`\`\`${languageId}
+${textBefore.slice(-1000)}
+\`\`\`
 
-        // 添加定义信息
-        if (fileContext.definitions.length > 0) {
-            const defs = fileContext.definitions
-                .slice(0, 5)
-                .map((d: any) => `${d.type} ${d.name}`)
-                .join(', ');
-            parts.push(`定义: ${defs}`);
-        }
+当前文件上下文（光标后）:
+\`\`\`${languageId}
+${textAfter.slice(-500)}
+\`\`\`
 
-        // 添加光标前代码
-        parts.push(`\n光标前代码:\n${textBefore.slice(-500)}`);
+${fileContext ? `其他文件上下文:\n${fileContext}` : ''}
 
-        // 添加光标后代码
-        if (textAfter.trim()) {
-            parts.push(`\n光标后代码:\n${textAfter.slice(0, 200)}`);
-        }
-
-        return parts.join('\n');
+请根据上下文提供精准的代码补全。只返回补全的代码，不要包含解释。`;
     }
 
-    /**
-     * 检测补全类型
-     */
-    private detectCompletionType(textBefore: string, position: vscode.Position): string {
-        const lastLine = textBefore.split('\n').pop() || '';
-        const trimmed = lastLine.trim();
+    private detectCompletionType(textBefore: string): string {
+        const lastLine = textBefore.split('\n').pop()?.trim() || '';
 
-        // 函数定义
-        if (trimmed.match(/^(?:export\s+)?(?:async\s+)?function\s+\w+\s*\(/)) {
-            return '函数补全';
+        if (lastLine.endsWith('{') || lastLine.endsWith(':')) {
+            return 'block';
+        }
+        if (lastLine.startsWith('function') || lastLine.startsWith('def') || lastLine.startsWith('class')) {
+            return 'declaration';
+        }
+        if (lastLine.includes('//') || lastLine.includes('#')) {
+            return 'comment';
+        }
+        if (lastLine.endsWith('.') || lastLine.endsWith('->')) {
+            return 'member';
         }
 
-        // 类定义
-        if (trimmed.match(/^(?:export\s+)?(?:abstract\s+)?class\s+\w+/)) {
-            return '类补全';
-        }
-
-        // 接口定义
-        if (trimmed.match(/^(?:export\s+)?interface\s+\w+/)) {
-            return '接口补全';
-        }
-
-        // 代码块
-        if (trimmed.endsWith('{') || trimmed.endsWith(':')) {
-            return '代码块补全';
-        }
-
-        // 行补全
-        return '行补全';
-    }
-
-    /**
-     * 提取代码部分
-     */
-    private extractCode(
-        response: string,
-        textBefore: string,
-        position: vscode.Position
-    ): string {
-        let code = response.trim();
-
-        // 移除 Markdown 代码块
-        const codeBlockMatch = code.match(/```(?:\w+)?\n?([\s\S]*?)```/);
-        if (codeBlockMatch) {
-            code = codeBlockMatch[1].trim();
-        }
-
-        // 移除前导/尾随换行
-        code = code.replace(/^\n+/, '').replace(/\n+$/, '');
-
-        // 如果补全以光标处已有的文本开头，移除它
-        const currentLine = textBefore.split('\n').pop() || '';
-        const currentTrimmed = currentLine.trim();
-        if (currentTrimmed && code.startsWith(currentTrimmed)) {
-            code = code.slice(currentTrimmed.length);
-        }
-
-        // 限制长度
-        const lines = code.split('\n');
-        if (lines.length > 15) {
-            code = lines.slice(0, 15).join('\n');
-        }
-
-        return code;
-    }
-
-    private isInStringOrComment(document: vscode.TextDocument, position: vscode.Position): boolean {
-        const line = document.lineAt(position.line).text;
-        const textBeforeCursor = line.substring(0, position.character);
-
-        // Simple heuristic: if odd number of quotes before cursor, we're in a string
-        const singleQuotes = (textBeforeCursor.match(/'/g) || []).length;
-        const doubleQuotes = (textBeforeCursor.match(/"/g) || []).length;
-        if (singleQuotes % 2 === 1 || doubleQuotes % 2 === 1) {
-            return true;
-        }
-
-        // Check for line comment
-        const commentIndex = textBeforeCursor.indexOf('//');
-        const hashIndex = textBeforeCursor.indexOf('#');
-        if (commentIndex >= 0 || hashIndex >= 0) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private limitCache(maxSize: number): void {
-        if (this.cache.size > maxSize) {
-            const firstKey = this.cache.keys().next().value;
-            if (firstKey !== undefined) {
-                this.cache.delete(firstKey);
-            }
-        }
-    }
-
-    clearCache(): void {
-        this.cache.clear();
+        return 'general';
     }
 }

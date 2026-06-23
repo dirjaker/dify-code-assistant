@@ -66,9 +66,9 @@ export const MODE_CONFIGS: Record<AgentMode, ModeConfig> = {
 - 修改要精确，不要重写不需要改的部分
 `,
         canWriteFiles: true,
-        canRunCommands: false,
-        canAutoApply: false,
-        requiresConfirmation: true
+        canRunCommands: true,
+        canAutoApply: true,
+        requiresConfirmation: false
     }
 };
 

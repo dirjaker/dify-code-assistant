@@ -32,17 +32,19 @@ export interface ToolResult {
 }
 
 export class LocalToolServer {
+    private handlers: Map<string, ToolHandler> = new Map();
     private server: http.Server | null = null;
     private port: number = 0;
-    private handlers: Map<string, ToolHandler> = new Map();
-    private outputChannel: vscode.OutputChannel;
+    private authToken: string = '';
     private workspaceRoot: string;
-    private authToken: string;
+    private outputChannel: vscode.OutputChannel;
+    private modeManager: any; // ModeManager
 
-    constructor(outputChannel: vscode.OutputChannel) {
+    constructor(outputChannel: vscode.OutputChannel, modeManager?: any) {
         this.outputChannel = outputChannel;
         this.workspaceRoot = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || '';
-        this.authToken = crypto.randomBytes(32).toString('hex');
+        this.authToken = Buffer.from(Math.random().toString()).toString('base64').slice(0, 32);
+        this.modeManager = modeManager;
         this.registerAllHandlers();
     }
 
@@ -323,8 +325,28 @@ export class LocalToolServer {
             const command = params.command;
             if (!command) throw new Error('command is required');
 
+            // 危险命令检测
+            const dangerousPatterns = [
+                /\brm\s+(-[rf]+\s+)?\/\b/i,      // rm -rf /
+                /\bmkfs\b/i,                       // mkfs
+                /\bdd\s+if=/i,                     // dd
+                /\bchmod\s+777\b/i,                // chmod 777
+                />\s*\/dev\/sd[a-z]\b/i,           // 写入磁盘
+                /\bshutdown\b/i,                   // shutdown
+                /\breboot\b/i,                     // reboot
+                /\biptables\s+-F\b/i,              // 清空防火墙
+                /\bsudo\s+rm\b/i,                  // sudo rm
+            ];
+            for (const pattern of dangerousPatterns) {
+                if (pattern.test(command)) {
+                    throw new Error(`危险命令被拒绝: ${command}`);
+                }
+            }
+
             const timeout = parseInt(params.timeout) || 30000;
             const cwd = params.cwd ? this.resolvePath(params.cwd) : this.workspaceRoot;
+
+            this.outputChannel.appendLine(`[Tool] 执行命令: ${command}`);
 
             return new Promise((resolve, reject) => {
                 cp.exec(command, {
@@ -504,6 +526,20 @@ export class LocalToolServer {
 
                             this.outputChannel.appendLine(`[Tool] ${request.tool}(${JSON.stringify(request.parameters).substring(0, 200)})`);
 
+                            // 模式权限检查
+                            if (this.modeManager) {
+                                const mode = this.modeManager.getMode();
+                                const writeTools = ['write_file', 'edit_file', 'insert_code', 'delete_file', 'move_file', 'create_directory'];
+                                const executeTools = ['execute_command'];
+                                
+                                if (writeTools.includes(request.tool) && !this.modeManager.canWriteFiles()) {
+                                    throw new Error(`当前模式 (${mode}) 不允许修改文件。请切换到 Agent 模式。`);
+                                }
+                                if (executeTools.includes(request.tool) && !this.modeManager.canRunCommands()) {
+                                    throw new Error(`当前模式 (${mode}) 不允许执行命令。请切换到 Agent 模式。`);
+                                }
+                            }
+
                             const result = await handler(request.parameters);
 
                             this.outputChannel.appendLine(`[Tool] ✓ ${request.tool} (${result.output.length} chars)`);
@@ -561,8 +597,15 @@ export class LocalToolServer {
     // ═══════════════════════════════════════════════
 
     private resolvePath(filePath: string): string {
-        if (path.isAbsolute(filePath)) return filePath;
-        return path.join(this.workspaceRoot, filePath);
+        // 防止路径穿越攻击
+        const resolved = path.isAbsolute(filePath)
+            ? path.resolve(filePath)
+            : path.resolve(this.workspaceRoot, filePath);
+        const normalizedWorkspace = path.resolve(this.workspaceRoot);
+        if (!resolved.startsWith(normalizedWorkspace)) {
+            throw new Error(`路径越界: ${filePath} 超出工作区范围`);
+        }
+        return resolved;
     }
 
     private async refreshEditor(filePath: string, content: string): Promise<void> {

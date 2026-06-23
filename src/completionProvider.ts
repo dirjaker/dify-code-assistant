@@ -1,170 +1,74 @@
 import * as vscode from 'vscode';
 import { DifyClient } from './difyClient';
+import { BaseCompletionProvider } from './baseCompletionProvider';
 
 /**
- * Ghost Text 补全提供者
- * 类似 Copilot 的内联灰色建议文本
+ * Ghost Text 内联补全提供器
  */
-export class CompletionProvider implements vscode.InlineCompletionItemProvider {
-    private client: DifyClient;
-    private cache: Map<string, string> = new Map();
-    private lastRequestTime: number = 0;
-    private debounceMs: number = 300;
-    private pendingRequest: AbortController | null = null;
-
+export class CompletionProvider extends BaseCompletionProvider {
     constructor(client: DifyClient) {
-        this.client = client;
+        super(client);
     }
 
-    async provideInlineCompletionItems(
-        document: vscode.TextDocument,
-        position: vscode.Position,
-        context: vscode.InlineCompletionContext,
-        token: vscode.CancellationToken
-    ): Promise<vscode.InlineCompletionItem[]> {
-        // Debounce
-        const now = Date.now();
-        if (now - this.lastRequestTime < this.debounceMs) {
-            return [];
-        }
-        this.lastRequestTime = now;
+    protected async doCompletion(
+        textBefore: string,
+        textAfter: string,
+        languageId: string,
+        fileName: string,
+        signal: AbortSignal
+    ): Promise<string> {
+        const prompt = this.buildPrompt(textBefore, textAfter, languageId, fileName);
+        return this.client.queryCodeCompletion(prompt, languageId, 'ghost-text', signal);
+    }
 
-        // Skip empty lines (unless continuing a pattern)
-        const lineText = document.lineAt(position).text;
-        const trimmed = lineText.trim();
-        if (trimmed.length === 0 && position.line > 0) {
-            // Check if previous line suggests continuation
-            const prevLine = document.lineAt(position.line - 1).text.trim();
-            if (!prevLine.endsWith(':') && !prevLine.endsWith('{') && !prevLine.endsWith('(')) {
-                return [];
+    protected extractCompletion(
+        completion: string,
+        textBefore: string,
+        position: vscode.Position
+    ): string | null {
+        if (!completion) return null;
+
+        // 提取代码块
+        const codeBlockMatch = completion.match(/```(?:\w+)?\n([\s\S]*?)```/);
+        let code = codeBlockMatch ? codeBlockMatch[1].trim() : completion.trim();
+
+        // 移除可能的前缀（与输入重复的部分）
+        const lastLine = textBefore.split('\n').pop() || '';
+        if (code.startsWith(lastLine.trim())) {
+            code = code.substring(lastLine.trim().length);
+        }
+
+        // 确保补全从新行或合理的位置开始
+        if (code.length > 0 && !code.startsWith('\n') && lastLine.trim().length > 0) {
+            // 如果当前行有内容，补全应该从新行开始
+            if (!lastLine.trim().endsWith('{') && !lastLine.trim().endsWith(':')) {
+                code = '\n' + code;
             }
         }
 
-        // Skip inside strings and comments
-        if (this.isInStringOrComment(document, position)) {
-            return [];
-        }
-
-        // Get context
-        const textBefore = document.getText(new vscode.Range(
-            new vscode.Position(Math.max(0, position.line - 30), 0),
-            position
-        ));
-        const textAfter = document.getText(new vscode.Range(
-            position,
-            new vscode.Position(Math.min(document.lineCount - 1, position.line + 10), 0)
-        ));
-
-        // Check cache
-        const cacheKey = textBefore.slice(-300);
-        if (this.cache.has(cacheKey)) {
-            const cached = this.cache.get(cacheKey)!;
-            if (cached) {
-                return [new vscode.InlineCompletionItem(cached)];
-            }
-        }
-
-        // Cancel previous request
-        if (this.pendingRequest) {
-            this.pendingRequest.abort();
-        }
-        this.pendingRequest = new AbortController();
-
-        try {
-            const languageId = document.languageId;
-            const fileName = document.fileName.split(/[\/]/).pop() || '';
-            const prompt = this.buildPrompt(textBefore, textAfter, languageId, fileName);
-
-            // 使用 queryCodeCompletion 而非 chat()，避免污染全局 messageHistory
-            const completion = await this.client.queryCodeCompletion(prompt, languageId, 'ghost-text');
-            let extracted = this.extractCompletion(completion, textBefore, position);
-
-            if (extracted && !token.isCancellationRequested) {
-                this.cache.set(cacheKey, extracted);
-                this.limitCache(100);
-                return [new vscode.InlineCompletionItem(extracted)];
-            }
-        } catch {
-            // Silent fail for completions
-        }
-
-        return [];
+        return code.length > 0 ? code : null;
     }
 
-    private isInStringOrComment(document: vscode.TextDocument, position: vscode.Position): boolean {
-        const line = document.lineAt(position.line).text;
-        const textBeforeCursor = line.substring(0, position.character);
+    private buildPrompt(
+        textBefore: string,
+        textAfter: string,
+        languageId: string,
+        fileName: string
+    ): string {
+        return `请补全以下 ${languageId} 代码。
 
-        // Simple heuristic: if odd number of quotes before cursor, we're in a string
-        const singleQuotes = (textBeforeCursor.match(/'/g) || []).length;
-        const doubleQuotes = (textBeforeCursor.match(/"/g) || []).length;
-        if (singleQuotes % 2 === 1 || doubleQuotes % 2 === 1) {
-            return true;
-        }
+文件名: ${fileName}
 
-        // Check for line comment
-        const commentIndex = textBeforeCursor.indexOf('//');
-        const hashIndex = textBeforeCursor.indexOf('#');
-        if (commentIndex >= 0 || hashIndex >= 0) {
-            return true;
-        }
+上下文（光标前）:
+\`\`\`${languageId}
+${textBefore.slice(-1000)}
+\`\`\`
 
-        return false;
-    }
+上下文（光标后）:
+\`\`\`${languageId}
+${textAfter.slice(-500)}
+\`\`\`
 
-    private buildPrompt(textBefore: string, textAfter: string, language: string, fileName: string): string {
-        return `You are a code completion engine. Output ONLY the continuation code, nothing else.
-No explanations, no markdown fences, no prefixes.
-Language: ${language}
-File: ${fileName}
-
-Code before cursor:
-${textBefore}
-
-Code after cursor:
-${textAfter}
-
-Continue the code from the cursor position. Output only the new code that should be inserted.`;
-    }
-
-    private extractCompletion(response: string, textBefore: string, position: vscode.Position): string {
-        let code = response.trim();
-
-        // Remove markdown fences if present
-        const codeBlockMatch = code.match(/```(?:\w+)?\n?([\s\S]*?)```/);
-        if (codeBlockMatch) {
-            code = codeBlockMatch[1].trim();
-        }
-
-        // Remove leading/trailing newlines
-        code = code.replace(/^\n+/, '').replace(/\n+$/, '');
-
-        // If completion starts with text that's already at cursor, remove it
-        const currentLine = textBefore.split('\n').pop() || '';
-        const currentTrimmed = currentLine.trim();
-        if (currentTrimmed && code.startsWith(currentTrimmed)) {
-            code = code.slice(currentTrimmed.length);
-        }
-
-        // Limit to reasonable length
-        const lines = code.split('\n');
-        if (lines.length > 15) {
-            code = lines.slice(0, 15).join('\n');
-        }
-
-        return code;
-    }
-
-    private limitCache(maxSize: number): void {
-        if (this.cache.size > maxSize) {
-            const firstKey = this.cache.keys().next().value;
-            if (firstKey !== undefined) {
-                this.cache.delete(firstKey);
-            }
-        }
-    }
-
-    clearCache(): void {
-        this.cache.clear();
+请只返回补全的代码，不要包含解释。补全应该从光标位置开始。`;
     }
 }

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { FileSystemProvider } from './fileSystem';
 import { generateDiff, FileDiff } from './diffEngine';
 import { DecorationManager } from './decorationManager';
+import { ModeManager } from './modeManager';
 
 /**
  * Diff 确认管理器
@@ -19,7 +20,7 @@ export class ToolExecutor {
     private decorationManager: DecorationManager;
     private pendingWrites: Map<string, { oldContent: string; newContent: string; reason: string }> = new Map();
 
-    constructor(fs: FileSystemProvider, _modeManager: any, decorationManager: DecorationManager) {
+    constructor(fs: FileSystemProvider, _modeManager: ModeManager, decorationManager: DecorationManager) {
         this.fs = fs;
         this.decorationManager = decorationManager;
     }

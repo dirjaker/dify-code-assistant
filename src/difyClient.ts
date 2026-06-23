@@ -96,7 +96,8 @@ export class DifyClient {
      */
     async queryKnowledge(
         query: string,
-        context?: { language?: string; queryType?: string; projectContext?: string }
+        context?: { language?: string; queryType?: string; projectContext?: string },
+        signal?: AbortSignal
     ): Promise<ChatResponse> {
         const url = `${this.config.apiUrl}/v1/workflows/run`;
         const body = {
@@ -110,7 +111,7 @@ export class DifyClient {
             user: 'vscode-user'
         };
 
-        const response = await this.request(url, body);
+        const response = await this.request(url, body, signal);
         return {
             answer: response.data?.outputs?.answer || response.answer || '',
             conversationId: '',
@@ -119,11 +120,11 @@ export class DifyClient {
         };
     }
 
-    async queryCodeCompletion(codeContext: string, language: string, completionType: string): Promise<string> {
+    async queryCodeCompletion(codeContext: string, language: string, completionType: string, signal?: AbortSignal): Promise<string> {
         const response = await this.queryKnowledge(`请补全以下 ${language} 代码`, {
             language, queryType: '代码补全',
             projectContext: `代码上下文：\n${codeContext}\n补全类型：${completionType}`
-        });
+        }, signal);
         return response.answer;
     }
 
@@ -472,7 +473,7 @@ export class DifyClient {
         });
     }
 
-    private request(url: string, body: any): Promise<any> {
+    private request(url: string, body: any, signal?: AbortSignal): Promise<any> {
         return new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
             const isHttps = parsedUrl.protocol === 'https:';
@@ -508,6 +509,15 @@ export class DifyClient {
             });
 
             req.on('error', reject);
+
+            // 支持 AbortSignal
+            if (signal) {
+                signal.addEventListener('abort', () => {
+                    req.destroy();
+                    reject(new Error('Request aborted'));
+                });
+            }
+
             req.write(JSON.stringify(body));
             req.end();
         });

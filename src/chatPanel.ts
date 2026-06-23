@@ -760,7 +760,7 @@ ${modeSuffix}`;
         if (activeTab) {
             // If tab was linked to session, replace with new temp ID
             if (activeTab.id.startsWith('session_')) {
-                const newTabId = 'tab_' + Date.now();
+                const newTabId = this._generateId('tab');
                 activeTab.id = newTabId;
                 this._activeTabId = newTabId;
             }
@@ -818,13 +818,18 @@ ${modeSuffix}`;
      * 历史记录
      */
     private _currentSessionId: string = '';
+    private _idCounter: number = 0;
+
+    private _generateId(prefix: string): string {
+        return `${prefix}_${Date.now()}_${++this._idCounter}`;
+    }
 
     private _saveMessage(role: string, text: string): void {
         this._chatHistory.push({ role, text, ts: Date.now() });
         if (this._extensionContext) {
             const sessions = this._extensionContext.globalState.get<Record<string, ChatSession>>('difyChatSessions', {});
             if (!this._currentSessionId) {
-                this._currentSessionId = 'session_' + Date.now();
+                this._currentSessionId = this._generateId('session');
             }
             sessions[this._currentSessionId] = {
                 id: this._currentSessionId,
@@ -925,7 +930,7 @@ ${modeSuffix}`;
 
     private _newTab(): void {
         // Save current session before creating new
-        const tabId = 'tab_' + Date.now();
+        const tabId = this._generateId('tab');
         this._openTabs.push({ id: tabId, title: 'New Chat' });
         this._activeTabId = tabId;
         this._currentSessionId = '';

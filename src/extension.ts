@@ -56,7 +56,7 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // 启动本地工具服务器
-    toolServer = new LocalToolServer(outputChannel);
+    toolServer = new LocalToolServer(outputChannel, modeManager);
     toolServer.start().then(port => {
         outputChannel.appendLine(`[Extension] Tool server started on port ${port}`);
         const authToken = toolServer.getAuthToken();
@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 注册代码补全（只注册一个 provider 避免冲突）
     completionProvider = new CompletionProvider(client);
-    ragCompletionProvider = new RAGCompletionProvider(client, contextCollector);
+    ragCompletionProvider = new RAGCompletionProvider(client, workspaceRoot);
     
     // 默认使用基础补全，可通过配置切换到 RAG 补全
     if (config.enableRagCompletion) {
